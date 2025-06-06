@@ -71,18 +71,18 @@ func main() {
 	}
 
 	// Override some values for demonstration
-	cfg.AutoscalerSpec.TargetValue = 100.0
-	cfg.AutoscalerSpec.StableWindow = 30 * time.Second
-	cfg.AutoscalerSpec.PanicWindowPercentage = 10.0
-	cfg.AutoscalerSpec.MinScale = 1
-	cfg.AutoscalerSpec.MaxScale = 10
+	cfg.TargetValue = 100.0
+	cfg.StableWindow = 30 * time.Second
+	cfg.PanicWindowPercentage = 10.0
+	cfg.MinScale = 1
+	cfg.MaxScale = 10
 
 	fmt.Println("=== Knative Pod Autoscaler Library Demo ===")
 	fmt.Printf("Configuration:\n")
-	fmt.Printf("  Scaling Metric: %s\n", cfg.AutoscalerSpec.ScalingMetric)
-	fmt.Printf("  Target Value: %.0f\n", cfg.AutoscalerSpec.TargetValue)
-	fmt.Printf("  Stable Window: %s\n", cfg.AutoscalerSpec.StableWindow)
-	fmt.Printf("  Min/Max Scale: %d/%d\n", cfg.AutoscalerSpec.MinScale, cfg.AutoscalerSpec.MaxScale)
+	fmt.Printf("  Scaling Metric: %s\n", cfg.ScalingMetric)
+	fmt.Printf("  Target Value: %.0f\n", cfg.TargetValue)
+	fmt.Printf("  Stable Window: %s\n", cfg.StableWindow)
+	fmt.Printf("  Min/Max Scale: %d/%d\n", cfg.MinScale, cfg.MaxScale)
 	fmt.Println()
 
 	// Create the autoscaler
@@ -92,9 +92,9 @@ func main() {
 	metricTransmitter := transmitter.NewLogTransmitter(nil)
 
 	// Create metric windows for stable and panic averages
-	stableWindow := metrics.NewTimedFloat64Buckets(cfg.AutoscalerSpec.StableWindow, time.Second)
+	stableWindow := metrics.NewTimedFloat64Buckets(cfg.StableWindow, time.Second)
 	panicWindow := metrics.NewTimedFloat64Buckets(
-		time.Duration(float64(cfg.AutoscalerSpec.StableWindow)*cfg.AutoscalerSpec.PanicWindowPercentage/100),
+		time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100),
 		time.Second,
 	)
 
@@ -204,8 +204,8 @@ func main() {
 
 				// Record metrics
 				metricTransmitter.RecordDesiredPods(ctx, "default", "example-app", recommendation.DesiredPodCount)
-				metricTransmitter.RecordStableValue(ctx, "default", "example-app", cfg.AutoscalerSpec.ScalingMetric, stableAvg)
-				metricTransmitter.RecordPanicValue(ctx, "default", "example-app", cfg.AutoscalerSpec.ScalingMetric, panicAvg)
+				metricTransmitter.RecordStableValue(ctx, "default", "example-app", cfg.ScalingMetric, stableAvg)
+				metricTransmitter.RecordPanicValue(ctx, "default", "example-app", cfg.ScalingMetric, panicAvg)
 				metricTransmitter.RecordPanicMode(ctx, "default", "example-app", recommendation.InPanicMode)
 
 				// Simulate applying the recommendation

@@ -1,0 +1,169 @@
+# golangci-lint configuration
+# v2.0.0+
+version: "2"
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+  
+  # Include test files
+  tests: true
+  
+  # Use module mode
+  modules-download-mode: readonly
+  
+  # Go version
+  go: '1.24'
+
+linters:
+  # Start with standard set and add more
+  default: standard
+  
+  enable:
+    # Additional useful linters
+    - bodyclose
+    - dogsled
+    - dupl
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+    - errorlint
+    - nilerr
+    
+  settings:
+    errcheck:
+      # Check type assertions
+      check-type-assertions: true
+      # Check blank assignments
+      check-blank: true
+    
+    govet:
+      # Enable all analyzers
+      enable-all: true
+      disable:
+        - fieldalignment # too strict
+      settings:
+        shadow:
+          strict: true
+    
+    gocyclo:
+      # Minimal code complexity to report
+      min-complexity: 15
+    
+    dupl:
+      # Tokens count to trigger issue
+      threshold: 100
+    
+    goconst:
+      # Minimal length of string constant
+      min-len: 3
+      # Minimal occurrences count to trigger
+      min-occurrences: 3
+    
+    misspell:
+      # Locale to use
+      locale: US
+    
+    nakedret:
+      # Make an issue if func has more lines of code than this setting and it has naked returns
+      max-func-lines: 30
+    
+    prealloc:
+      # Report preallocation suggestions only on simple loops
+      simple: true
+      range-loops: true
+      for-loops: false
+    
+    gocritic:
+      # Settings passed to gocritic
+      settings:
+        captLocal:
+          paramsOnly: false
+        underef:
+          skipRecvDeref: false
+    
+    revive:
+      # Minimal confidence for issues
+      confidence: 0.8
+      
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+  
+  exclusions:
+    # Exclude some linters from running on test files
+    rules:
+      # Skip errcheck for all test files
+      - path: _test\.go
+        linters:
+          - errcheck
+      
+      # Also exclude some other linters from test files
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - goconst
+
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 50
+  
+  # Maximum count of issues with the same text
+  max-same-issues: 3
+  
+  # Show only new issues created after git revision
+  # new-from-rev: HEAD~
+  
+  # Fix found issues (if it's supported by the linter)
+  fix: false
+
+output:
+  formats:
+    text:
+      # Use the default stdout
+      path: stdout
+      # Print linter name in the end of issue text
+      print-linter-name: true
+      # Print lines of code with issue
+      print-issued-lines: true
+      # Use colors
+      colors: true
+  
+  # Sort results by: filepath, line and column
+  sort-order:
+    - linter
+    - file
+  
+  # Show statistics per linter
+  show-stats: true 
