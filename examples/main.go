@@ -173,7 +173,7 @@ func main() {
 			snapshot := metrics.NewMetricSnapshot(
 				stableAvg,
 				panicAvg,
-				int(currentPods),
+				currentPods,
 				now,
 			)
 

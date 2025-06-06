@@ -342,7 +342,7 @@ func TestSlidingWindowAutoscaler_NoData(t *testing.T) {
 func TestExcessBurstCapacity(t *testing.T) {
 	tests := []struct {
 		name                string
-		readyPods           int
+		readyPods           int32
 		totalValue          float64
 		targetBurstCapacity float64
 		observedPanicValue  float64

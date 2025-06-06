@@ -245,12 +245,12 @@ func minInt(a, b int) int {
 type MetricSnapshot struct {
 	stableValue   float64
 	panicValue    float64
-	readyPodCount int
+	readyPodCount int32
 	timestamp     time.Time
 }
 
 // NewMetricSnapshot creates a new metric snapshot.
-func NewMetricSnapshot(stableValue, panicValue float64, readyPods int, timestamp time.Time) *MetricSnapshot {
+func NewMetricSnapshot(stableValue, panicValue float64, readyPods int32, timestamp time.Time) *MetricSnapshot {
 	return &MetricSnapshot{
 		stableValue:   stableValue,
 		panicValue:    panicValue,
@@ -270,7 +270,7 @@ func (s *MetricSnapshot) PanicValue() float64 {
 }
 
 // ReadyPodCount returns the number of ready pods.
-func (s *MetricSnapshot) ReadyPodCount() int {
+func (s *MetricSnapshot) ReadyPodCount() int32 {
 	return s.readyPodCount
 }
 

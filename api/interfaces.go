@@ -49,7 +49,7 @@ type MetricSnapshot interface {
 	PanicValue() float64
 
 	// ReadyPodCount returns the number of ready pods.
-	ReadyPodCount() int
+	ReadyPodCount() int32
 
 	// Timestamp returns when this snapshot was taken.
 	Timestamp() time.Time

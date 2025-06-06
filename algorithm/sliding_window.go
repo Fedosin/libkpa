@@ -167,7 +167,7 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 		InPanicMode:         inPanicMode,
 		ObservedStableValue: observedStableValue,
 		ObservedPanicValue:  observedPanicValue,
-		CurrentPodCount:     int32(snapshot.ReadyPodCount()),
+		CurrentPodCount:     snapshot.ReadyPodCount(),
 	}
 }
 
@@ -202,7 +202,7 @@ func (a *SlidingWindowAutoscaler) GetSpec() api.AutoscalerSpec {
 // calculateExcessBurstCapacity computes the excess burst capacity.
 // A negative value means the deployment doesn't have enough capacity
 // to handle the target burst capacity.
-func calculateExcessBurstCapacity(readyPods int, totalValue, targetBurstCapacity, observedPanicValue float64) int32 {
+func calculateExcessBurstCapacity(readyPods int32, totalValue, targetBurstCapacity, observedPanicValue float64) int32 {
 	if targetBurstCapacity == 0 {
 		return 0
 	}
