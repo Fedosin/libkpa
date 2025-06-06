@@ -33,7 +33,7 @@ type SlidingWindowAutoscaler struct {
 	mu sync.RWMutex
 
 	// Configuration
-	spec *api.AutoscalerSpec
+	spec api.AutoscalerSpec
 
 	// State for panic mode
 	panicTime    time.Time
@@ -44,7 +44,7 @@ type SlidingWindowAutoscaler struct {
 }
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
-func NewSlidingWindowAutoscaler(spec *api.AutoscalerSpec) *SlidingWindowAutoscaler {
+func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec) *SlidingWindowAutoscaler {
 	var delayWindow *metrics.TimeWindow
 	if spec.ScaleDownDelay > 0 {
 		delayWindow = metrics.NewTimeWindow(spec.ScaleDownDelay, 2*time.Second)
@@ -173,7 +173,7 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 }
 
 // Update reconfigures the autoscaler with a new spec.
-func (a *SlidingWindowAutoscaler) Update(spec *api.AutoscalerSpec) error {
+func (a *SlidingWindowAutoscaler) Update(spec api.AutoscalerSpec) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -197,7 +197,7 @@ func (a *SlidingWindowAutoscaler) Update(spec *api.AutoscalerSpec) error {
 func (a *SlidingWindowAutoscaler) GetSpec() api.AutoscalerSpec {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return *a.spec
+	return a.spec
 }
 
 // calculateExcessBurstCapacity computes the excess burst capacity.

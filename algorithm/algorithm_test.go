@@ -26,7 +26,7 @@ import (
 )
 
 func TestSlidingWindowAutoscaler_StableTraffic(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -69,7 +69,7 @@ func TestSlidingWindowAutoscaler_StableTraffic(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_RampingTraffic(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -110,7 +110,7 @@ func TestSlidingWindowAutoscaler_RampingTraffic(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_PanicMode(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -170,7 +170,7 @@ func TestSlidingWindowAutoscaler_PanicMode(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_ScaleDownDelay(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -219,7 +219,7 @@ func TestSlidingWindowAutoscaler_ScaleDownDelay(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_MinMaxScale(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -266,7 +266,7 @@ func TestSlidingWindowAutoscaler_MinMaxScale(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_ActivationScale(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -303,7 +303,7 @@ func TestSlidingWindowAutoscaler_ActivationScale(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_NoData(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -439,7 +439,7 @@ func TestPanicModeCalculator(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Update(t *testing.T) {
-	spec := &api.AutoscalerSpec{
+	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
 		ScalingMetric:         api.Concurrency,
@@ -459,11 +459,11 @@ func TestSlidingWindowAutoscaler_Update(t *testing.T) {
 	autoscaler := NewSlidingWindowAutoscaler(spec)
 
 	// Update configuration
-	newSpec := *spec
+	newSpec := spec
 	newSpec.TargetValue = 150.0
 	newSpec.ScaleDownDelay = 30 * time.Second
 
-	err := autoscaler.Update(&newSpec)
+	err := autoscaler.Update(newSpec)
 	if err != nil {
 		t.Errorf("Update failed: %v", err)
 	}
