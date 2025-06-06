@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -348,6 +349,60 @@ func TestValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorAggregation(t *testing.T) {
+	// Set up some invalid environment variables
+	os.Setenv("AUTOSCALER_ENABLE_SCALE_TO_ZERO", "invalid-bool")
+	os.Setenv("AUTOSCALER_MAX_SCALE_UP_RATE", "not-a-number")
+	os.Setenv("AUTOSCALER_STABLE_WINDOW", "invalid-duration")
+	os.Setenv("AUTOSCALER_MIN_SCALE", "abc")
+	defer func() {
+		os.Unsetenv("AUTOSCALER_ENABLE_SCALE_TO_ZERO")
+		os.Unsetenv("AUTOSCALER_MAX_SCALE_UP_RATE")
+		os.Unsetenv("AUTOSCALER_STABLE_WINDOW")
+		os.Unsetenv("AUTOSCALER_MIN_SCALE")
+	}()
+
+	// Try to load configuration
+	cfg, err := Load()
+	if err == nil {
+		t.Fatal("expected error but got none")
+	}
+
+	// Print the aggregated error
+	fmt.Printf("Error message:\n%v\n", err)
+
+	// Verify that cfg is nil when there are errors
+	if cfg != nil {
+		t.Fatal("expected nil config when errors occur")
+	}
+}
+
+func TestErrorAggregationFromMap(t *testing.T) {
+	// Create a map with invalid values
+	data := map[string]string{
+		"enable-scale-to-zero":    "not-bool",
+		"max-scale-up-rate":       "invalid-float",
+		"stable-window":           "bad-duration",
+		"initial-scale":           "negative-one",
+		"panic-window-percentage": "not-a-percentage",
+	}
+
+	// Try to load configuration
+	cfg, err := LoadFromMap(data)
+	if err == nil {
+		t.Fatal("expected error but got none")
+	}
+
+	// Print the aggregated error
+	fmt.Printf("Error message from map:\n%v\n", err)
+
+	// Verify that cfg is nil when there are errors
+	if cfg != nil {
+		t.Fatal("expected nil config when errors occur")
+	}
+}
+
 
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[:len(substr)] == substr || len(s) > len(substr) && contains(s[1:], substr)

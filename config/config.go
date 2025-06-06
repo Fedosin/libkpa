@@ -55,31 +55,125 @@ const (
 	minTargetValue  = 0.01
 )
 
+// configErrors aggregates multiple configuration errors
+type configErrors struct {
+	errors []error
+}
+
+func (ce *configErrors) add(err error) {
+	if err != nil {
+		ce.errors = append(ce.errors, err)
+	}
+}
+
+func (ce *configErrors) hasErrors() bool {
+	return len(ce.errors) > 0
+}
+
+func (ce *configErrors) Error() string {
+	if len(ce.errors) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("configuration errors:")
+	for _, err := range ce.errors {
+		sb.WriteString("\n  - ")
+		sb.WriteString(err.Error())
+	}
+	return sb.String()
+}
+
 // Load creates a Config from environment variables and validates it.
 func Load() (*api.Config, error) {
+	errs := &configErrors{}
+
+	enableScaleToZero, err := getEnvBool("ENABLE_SCALE_TO_ZERO", true)
+	errs.add(err)
+
+	scaleToZeroGracePeriod, err := getEnvDuration("SCALE_TO_ZERO_GRACE_PERIOD", defaultScaleToZeroGracePeriod)
+	errs.add(err)
+
+	containerConcurrencyTargetFraction, err := getEnvFloat("CONTAINER_CONCURRENCY_TARGET_PERCENTAGE", defaultContainerConcurrencyTargetFraction)
+	errs.add(err)
+
+	containerConcurrencyTargetDefault, err := getEnvFloat("CONTAINER_CONCURRENCY_TARGET_DEFAULT", defaultContainerConcurrencyTargetDefault)
+	errs.add(err)
+
+	rpsTargetDefault, err := getEnvFloat("RPS_TARGET_DEFAULT", defaultRPSTargetDefault)
+	errs.add(err)
+
+	targetUtilization, err := getEnvFloat("TARGET_UTILIZATION", defaultTargetUtilization)
+	errs.add(err)
+
+	maxScaleUpRate, err := getEnvFloat("MAX_SCALE_UP_RATE", defaultMaxScaleUpRate)
+	errs.add(err)
+
+	maxScaleDownRate, err := getEnvFloat("MAX_SCALE_DOWN_RATE", defaultMaxScaleDownRate)
+	errs.add(err)
+
+	targetValue, err := getEnvFloat("TARGET_VALUE", defaultContainerConcurrencyTargetDefault)
+	errs.add(err)
+
+	totalValue, err := getEnvFloat("TOTAL_VALUE", 1000.0)
+	errs.add(err)
+
+	targetBurstCapacity, err := getEnvFloat("TARGET_BURST_CAPACITY", defaultTargetBurstCapacity)
+	errs.add(err)
+
+	panicThreshold, err := getEnvFloat("PANIC_THRESHOLD_PERCENTAGE", defaultPanicThresholdPercentage)
+	errs.add(err)
+
+	panicWindowPercentage, err := getEnvFloat("PANIC_WINDOW_PERCENTAGE", defaultPanicWindowPercentage)
+	errs.add(err)
+
+	stableWindow, err := getEnvDuration("STABLE_WINDOW", defaultStableWindow)
+	errs.add(err)
+
+	scaleDownDelay, err := getEnvDuration("SCALE_DOWN_DELAY", defaultScaleDownDelay)
+	errs.add(err)
+
+	initialScale, err := getEnvInt32("INITIAL_SCALE", defaultInitialScale)
+	errs.add(err)
+
+	minScale, err := getEnvInt32("MIN_SCALE", defaultMinScale)
+	errs.add(err)
+
+	maxScale, err := getEnvInt32("MAX_SCALE", defaultMaxScale)
+	errs.add(err)
+
+	activationScale, err := getEnvInt32("ACTIVATION_SCALE", defaultActivationScale)
+	errs.add(err)
+
+	reachable, err := getEnvBool("REACHABLE", true)
+	errs.add(err)
+
+	if errs.hasErrors() {
+		return nil, errs
+	}
+
 	cfg := &api.Config{
-		EnableScaleToZero:                  getEnvBool("ENABLE_SCALE_TO_ZERO", true),
-		ScaleToZeroGracePeriod:             getEnvDuration("SCALE_TO_ZERO_GRACE_PERIOD", defaultScaleToZeroGracePeriod),
-		ContainerConcurrencyTargetFraction: getEnvFloat("CONTAINER_CONCURRENCY_TARGET_PERCENTAGE", defaultContainerConcurrencyTargetFraction),
-		ContainerConcurrencyTargetDefault:  getEnvFloat("CONTAINER_CONCURRENCY_TARGET_DEFAULT", defaultContainerConcurrencyTargetDefault),
-		RPSTargetDefault:                   getEnvFloat("RPS_TARGET_DEFAULT", defaultRPSTargetDefault),
-		TargetUtilization:                  getEnvFloat("TARGET_UTILIZATION", defaultTargetUtilization),
+		EnableScaleToZero:                  enableScaleToZero,
+		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
+		ContainerConcurrencyTargetFraction: containerConcurrencyTargetFraction,
+		ContainerConcurrencyTargetDefault:  containerConcurrencyTargetDefault,
+		RPSTargetDefault:                   rpsTargetDefault,
+		TargetUtilization:                  targetUtilization,
 		AutoscalerSpec: api.AutoscalerSpec{
-			MaxScaleUpRate:        getEnvFloat("MAX_SCALE_UP_RATE", defaultMaxScaleUpRate),
-			MaxScaleDownRate:      getEnvFloat("MAX_SCALE_DOWN_RATE", defaultMaxScaleDownRate),
+			MaxScaleUpRate:        maxScaleUpRate,
+			MaxScaleDownRate:      maxScaleDownRate,
 			ScalingMetric:         api.ScalingMetric(getEnvString("SCALING_METRIC", string(api.Concurrency))),
-			TargetValue:           getEnvFloat("TARGET_VALUE", defaultContainerConcurrencyTargetDefault),
-			TotalValue:            getEnvFloat("TOTAL_VALUE", 1000.0),
-			TargetBurstCapacity:   getEnvFloat("TARGET_BURST_CAPACITY", defaultTargetBurstCapacity),
-			PanicThreshold:        getEnvFloat("PANIC_THRESHOLD_PERCENTAGE", defaultPanicThresholdPercentage),
-			PanicWindowPercentage: getEnvFloat("PANIC_WINDOW_PERCENTAGE", defaultPanicWindowPercentage),
-			StableWindow:          getEnvDuration("STABLE_WINDOW", defaultStableWindow),
-			ScaleDownDelay:        getEnvDuration("SCALE_DOWN_DELAY", defaultScaleDownDelay),
-			InitialScale:          getEnvInt32("INITIAL_SCALE", defaultInitialScale),
-			MinScale:              getEnvInt32("MIN_SCALE", defaultMinScale),
-			MaxScale:              getEnvInt32("MAX_SCALE", defaultMaxScale),
-			ActivationScale:       getEnvInt32("ACTIVATION_SCALE", defaultActivationScale),
-			Reachable:             getEnvBool("REACHABLE", true),
+			TargetValue:           targetValue,
+			TotalValue:            totalValue,
+			TargetBurstCapacity:   targetBurstCapacity,
+			PanicThreshold:        panicThreshold,
+			PanicWindowPercentage: panicWindowPercentage,
+			StableWindow:          stableWindow,
+			ScaleDownDelay:        scaleDownDelay,
+			InitialScale:          initialScale,
+			MinScale:              minScale,
+			MaxScale:              maxScale,
+			ActivationScale:       activationScale,
+			Reachable:             reachable,
 		},
 	}
 
@@ -96,29 +190,95 @@ func Load() (*api.Config, error) {
 
 // LoadFromMap creates a Config from a map of string values.
 func LoadFromMap(data map[string]string) (*api.Config, error) {
+	errs := &configErrors{}
+
+	enableScaleToZero, err := parseBool(data["enable-scale-to-zero"], true)
+	errs.add(err)
+
+	scaleToZeroGracePeriod, err := parseDuration(data["scale-to-zero-grace-period"], defaultScaleToZeroGracePeriod)
+	errs.add(err)
+
+	containerConcurrencyTargetFraction, err := parseFloat(data["container-concurrency-target-percentage"], defaultContainerConcurrencyTargetFraction)
+	errs.add(err)
+
+	containerConcurrencyTargetDefault, err := parseFloat(data["container-concurrency-target-default"], defaultContainerConcurrencyTargetDefault)
+	errs.add(err)
+
+	rpsTargetDefault, err := parseFloat(data["requests-per-second-target-default"], defaultRPSTargetDefault)
+	errs.add(err)
+
+	targetUtilization, err := parseFloat(data["target-utilization"], defaultTargetUtilization)
+	errs.add(err)
+
+	maxScaleUpRate, err := parseFloat(data["max-scale-up-rate"], defaultMaxScaleUpRate)
+	errs.add(err)
+
+	maxScaleDownRate, err := parseFloat(data["max-scale-down-rate"], defaultMaxScaleDownRate)
+	errs.add(err)
+
+	targetValue, err := parseFloat(data["target-value"], defaultContainerConcurrencyTargetDefault)
+	errs.add(err)
+
+	totalValue, err := parseFloat(data["total-value"], 1000.0)
+	errs.add(err)
+
+	targetBurstCapacity, err := parseFloat(data["target-burst-capacity"], defaultTargetBurstCapacity)
+	errs.add(err)
+
+	panicThreshold, err := parseFloat(data["panic-threshold-percentage"], defaultPanicThresholdPercentage)
+	errs.add(err)
+
+	panicWindowPercentage, err := parseFloat(data["panic-window-percentage"], defaultPanicWindowPercentage)
+	errs.add(err)
+
+	stableWindow, err := parseDuration(data["stable-window"], defaultStableWindow)
+	errs.add(err)
+
+	scaleDownDelay, err := parseDuration(data["scale-down-delay"], defaultScaleDownDelay)
+	errs.add(err)
+
+	initialScale, err := parseInt32(data["initial-scale"], defaultInitialScale)
+	errs.add(err)
+
+	minScale, err := parseInt32(data["min-scale"], defaultMinScale)
+	errs.add(err)
+
+	maxScale, err := parseInt32(data["max-scale"], defaultMaxScale)
+	errs.add(err)
+
+	activationScale, err := parseInt32(data["activation-scale"], defaultActivationScale)
+	errs.add(err)
+
+	reachable, err := parseBool(data["reachable"], true)
+	errs.add(err)
+
+	if errs.hasErrors() {
+		return nil, errs
+	}
+
 	cfg := &api.Config{
-		EnableScaleToZero:                  parseBool(data["enable-scale-to-zero"], true),
-		ScaleToZeroGracePeriod:             parseDuration(data["scale-to-zero-grace-period"], defaultScaleToZeroGracePeriod),
-		ContainerConcurrencyTargetFraction: parseFloat(data["container-concurrency-target-percentage"], defaultContainerConcurrencyTargetFraction),
-		ContainerConcurrencyTargetDefault:  parseFloat(data["container-concurrency-target-default"], defaultContainerConcurrencyTargetDefault),
-		RPSTargetDefault:                   parseFloat(data["requests-per-second-target-default"], defaultRPSTargetDefault),
-		TargetUtilization:                  parseFloat(data["target-utilization"], defaultTargetUtilization),
+		EnableScaleToZero:                  enableScaleToZero,
+		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
+		ContainerConcurrencyTargetFraction: containerConcurrencyTargetFraction,
+		ContainerConcurrencyTargetDefault:  containerConcurrencyTargetDefault,
+		RPSTargetDefault:                   rpsTargetDefault,
+		TargetUtilization:                  targetUtilization,
 		AutoscalerSpec: api.AutoscalerSpec{
-			MaxScaleUpRate:        parseFloat(data["max-scale-up-rate"], defaultMaxScaleUpRate),
-			MaxScaleDownRate:      parseFloat(data["max-scale-down-rate"], defaultMaxScaleDownRate),
+			MaxScaleUpRate:        maxScaleUpRate,
+			MaxScaleDownRate:      maxScaleDownRate,
 			ScalingMetric:         api.ScalingMetric(parseString(data["scaling-metric"], string(api.Concurrency))),
-			TargetValue:           parseFloat(data["target-value"], defaultContainerConcurrencyTargetDefault),
-			TotalValue:            parseFloat(data["total-value"], 1000.0),
-			TargetBurstCapacity:   parseFloat(data["target-burst-capacity"], defaultTargetBurstCapacity),
-			PanicThreshold:        parseFloat(data["panic-threshold-percentage"], defaultPanicThresholdPercentage),
-			PanicWindowPercentage: parseFloat(data["panic-window-percentage"], defaultPanicWindowPercentage),
-			StableWindow:          parseDuration(data["stable-window"], defaultStableWindow),
-			ScaleDownDelay:        parseDuration(data["scale-down-delay"], defaultScaleDownDelay),
-			InitialScale:          parseInt32(data["initial-scale"], defaultInitialScale),
-			MinScale:              parseInt32(data["min-scale"], defaultMinScale),
-			MaxScale:              parseInt32(data["max-scale"], defaultMaxScale),
-			ActivationScale:       parseInt32(data["activation-scale"], defaultActivationScale),
-			Reachable:             parseBool(data["reachable"], true),
+			TargetValue:           targetValue,
+			TotalValue:            totalValue,
+			TargetBurstCapacity:   targetBurstCapacity,
+			PanicThreshold:        panicThreshold,
+			PanicWindowPercentage: panicWindowPercentage,
+			StableWindow:          stableWindow,
+			ScaleDownDelay:        scaleDownDelay,
+			InitialScale:          initialScale,
+			MinScale:              minScale,
+			MaxScale:              maxScale,
+			ActivationScale:       activationScale,
+			Reachable:             reachable,
 		},
 	}
 
@@ -223,36 +383,52 @@ func getEnvString(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(EnvPrefix + key); value != "" {
-		b, _ := strconv.ParseBool(value)
-		return b
+func getEnvBool(key string, defaultValue bool) (bool, error) {
+	value := os.Getenv(EnvPrefix + key)
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	b, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid boolean value for %s%s: %q", EnvPrefix, key, value)
+	}
+	return b, nil
 }
 
-func getEnvFloat(key string, defaultValue float64) float64 {
-	if value := os.Getenv(EnvPrefix + key); value != "" {
-		f, _ := strconv.ParseFloat(value, 64)
-		return f
+func getEnvFloat(key string, defaultValue float64) (float64, error) {
+	value := os.Getenv(EnvPrefix + key)
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	f, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid float value for %s%s: %q", EnvPrefix, key, value)
+	}
+	return f, nil
 }
 
-func getEnvInt32(key string, defaultValue int32) int32 {
-	if value := os.Getenv(EnvPrefix + key); value != "" {
-		i, _ := strconv.ParseInt(value, 10, 32)
-		return int32(i)
+func getEnvInt32(key string, defaultValue int32) (int32, error) {
+	value := os.Getenv(EnvPrefix + key)
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	i, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid int32 value for %s%s: %q", EnvPrefix, key, value)
+	}
+	return int32(i), nil
 }
 
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value := os.Getenv(EnvPrefix + key); value != "" {
-		d, _ := time.ParseDuration(value)
-		return d
+func getEnvDuration(key string, defaultValue time.Duration) (time.Duration, error) {
+	value := os.Getenv(EnvPrefix + key)
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid duration value for %s%s: %q", EnvPrefix, key, value)
+	}
+	return d, nil
 }
 
 // Helper functions for map parsing
@@ -263,34 +439,46 @@ func parseString(value, defaultValue string) string {
 	return defaultValue
 }
 
-func parseBool(value string, defaultValue bool) bool {
-	if value != "" {
-		b, _ := strconv.ParseBool(value)
-		return b
+func parseBool(value string, defaultValue bool) (bool, error) {
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	b, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid boolean value: %q", value)
+	}
+	return b, nil
 }
 
-func parseFloat(value string, defaultValue float64) float64 {
-	if value != "" {
-		f, _ := strconv.ParseFloat(strings.TrimSpace(value), 64)
-		return f
+func parseFloat(value string, defaultValue float64) (float64, error) {
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	f, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid float value: %q", value)
+	}
+	return f, nil
 }
 
-func parseInt32(value string, defaultValue int32) int32 {
-	if value != "" {
-		i, _ := strconv.ParseInt(strings.TrimSpace(value), 10, 32)
-		return int32(i)
+func parseInt32(value string, defaultValue int32) (int32, error) {
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	i, err := strconv.ParseInt(strings.TrimSpace(value), 10, 32)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid int32 value: %q", value)
+	}
+	return int32(i), nil
 }
 
-func parseDuration(value string, defaultValue time.Duration) time.Duration {
-	if value != "" {
-		d, _ := time.ParseDuration(strings.TrimSpace(value))
-		return d
+func parseDuration(value string, defaultValue time.Duration) (time.Duration, error) {
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
+	d, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid duration value: %q", value)
+	}
+	return d, nil
 }
