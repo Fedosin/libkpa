@@ -73,7 +73,6 @@ func main() {
 - **`algorithm/`** - Autoscaling algorithm implementations (sliding window, panic mode)
 - **`metrics/`** - Time-windowed metric collection and aggregation
 - **`transmitter/`** - Metric reporting interfaces for monitoring integration
-- **`util/`** - Helper functions for math operations, statistics, and utilities
 
 ## Documentation
 

@@ -325,6 +325,15 @@ func validate(cfg *api.Config) (*api.Config, error) {
 	if cfg.RPSTargetDefault < minTargetValue {
 		return nil, fmt.Errorf("rps-target-default must be at least %v, was: %v", minTargetValue, cfg.RPSTargetDefault)
 	}
+	if cfg.TargetValue > cfg.TotalValue {
+		return nil, fmt.Errorf("target-value = %v, must be less than or equal to total-value = %v", cfg.TargetValue, cfg.TotalValue)
+	}
+	if cfg.TargetValue <= 0 {
+		return nil, fmt.Errorf("target-value = %v, must be positive", cfg.TargetValue)
+	}
+	if cfg.TotalValue <= 0 {
+		return nil, fmt.Errorf("total-value = %v, must be positive", cfg.TotalValue)
+	}
 
 	// Validate scale rates
 	if cfg.MaxScaleUpRate <= 1.0 {
