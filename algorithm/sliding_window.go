@@ -108,14 +108,15 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state
-	if !inPanicMode && isOverPanicThreshold {
+	switch {
+	case !inPanicMode && isOverPanicThreshold:
 		// Enter panic mode
 		a.panicTime = now
 		inPanicMode = true
-	} else if isOverPanicThreshold {
+	case isOverPanicThreshold:
 		// Extend panic mode
 		a.panicTime = now
-	} else if inPanicMode && !isOverPanicThreshold && a.panicTime.Add(a.spec.StableWindow).Before(now) {
+	case inPanicMode && !isOverPanicThreshold && a.panicTime.Add(a.spec.StableWindow).Before(now):
 		// Exit panic mode
 		a.panicTime = time.Time{}
 		a.maxPanicPods = 0
