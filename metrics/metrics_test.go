@@ -158,9 +158,9 @@ func TestTimeWindow_MaxTracking(t *testing.T) {
 	window.Record(now.Add(3*time.Second), 8)
 
 	// Should return maximum value
-	max := window.Current()
-	if max != 10 {
-		t.Errorf("Expected max 10, got %d", max)
+	maxValue := window.Current()
+	if maxValue != 10 {
+		t.Errorf("Expected max 10, got %d", maxValue)
 	}
 }
 
@@ -178,8 +178,8 @@ func TestTimeWindow_ResizeWindow(t *testing.T) {
 	window.ResizeWindow(5 * time.Second)
 
 	// Max should still be present if within new window
-	max := window.Current()
-	if max == 0 {
+	maxValue := window.Current()
+	if maxValue == 0 {
 		t.Error("Max should not be 0 after resize")
 	}
 }

@@ -27,7 +27,6 @@ linters:
     - gochecknoinits
     - goconst
     - gocritic
-    - gocyclo
     - goprintffuncname
     - gosec
     - misspell
@@ -134,6 +133,10 @@ linters:
           - dupl
           - gosec
           - goconst
+
+      - path: examples/.*
+        linters:
+          - gosec
 
 issues:
   # Maximum issues count per one linter

@@ -216,16 +216,16 @@ func (t *TimeWindow) Current() int32 {
 	t.window.mu.RLock()
 	defer t.window.mu.RUnlock()
 
-	max := int32(0)
+	maxValue := int32(0)
 	for _, v := range t.window.buckets {
 		if v < 0 { // Remember we store negative values
 			val := int32(-v)
-			if val > max {
-				max = val
+			if val > maxValue {
+				maxValue = val
 			}
 		}
 	}
-	return max
+	return maxValue
 }
 
 // ResizeWindow changes the window duration.
