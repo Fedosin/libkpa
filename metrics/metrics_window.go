@@ -18,7 +18,6 @@ limitations under the License.
 package metrics
 
 import (
-	"math"
 	"sync"
 	"time"
 )
@@ -48,7 +47,7 @@ type TimedFloat64Buckets struct {
 
 // NewTimedFloat64Buckets creates a new TimedFloat64Buckets with the given window and granularity.
 func NewTimedFloat64Buckets(window, granularity time.Duration) *TimedFloat64Buckets {
-	numBuckets := int(math.Ceil(float64(window) / float64(granularity)))
+	numBuckets := (window + granularity - 1) / granularity
 	return &TimedFloat64Buckets{
 		buckets:     make([]float64, numBuckets),
 		granularity: granularity,
@@ -65,35 +64,40 @@ func (t *TimedFloat64Buckets) Record(now time.Time, value float64) {
 
 	writeIdx := t.timeToIndex(now)
 
-	if t.lastWrite != bucketTime {
-		if bucketTime.Add(t.window).After(t.lastWrite) {
-			// Update firstWrite if this is the first write or if it's before the current firstWrite
-			if t.firstWrite.IsZero() || t.firstWrite.After(bucketTime) {
-				t.firstWrite = bucketTime
-			}
+	// If the last write is the same as the bucket time, we can just add the value to the bucket
+	if t.lastWrite.Equal(bucketTime) {
+		t.buckets[writeIdx%len(t.buckets)] += value
+		t.windowTotal += value
+		return
+	}
 
-			if bucketTime.After(t.lastWrite) {
-				if bucketTime.Sub(t.lastWrite) >= t.window {
-					// Reset all buckets if we haven't written for a full window
-					t.firstWrite = bucketTime
-					for i := range t.buckets {
-						t.buckets[i] = 0
-					}
-					t.windowTotal = 0
-				} else {
-					// Clear buckets between lastWrite and now
-					for i := t.timeToIndex(t.lastWrite) + 1; i <= writeIdx; i++ {
-						idx := i % len(t.buckets)
-						t.windowTotal -= t.buckets[idx]
-						t.buckets[idx] = 0
-					}
-				}
-				t.lastWrite = bucketTime
+	// Ignore values older than a window
+	if bucketTime.Add(t.window).Before(t.lastWrite) {
+		return
+	}
+
+	// Update firstWrite if this is the first write or if it's before the current firstWrite
+	if t.firstWrite.IsZero() || t.firstWrite.After(bucketTime) {
+		t.firstWrite = bucketTime
+	}
+
+	if bucketTime.After(t.lastWrite) {
+		if bucketTime.Sub(t.lastWrite) >= t.window {
+			// Reset all buckets if we haven't written for a full window
+			t.firstWrite = bucketTime
+			for i := range t.buckets {
+				t.buckets[i] = 0
 			}
+			t.windowTotal = 0
 		} else {
-			// Ignore values older than a window
-			return
+			// Clear buckets between lastWrite and now
+			for i := t.timeToIndex(t.lastWrite) + 1; i <= writeIdx; i++ {
+				idx := i % len(t.buckets)
+				t.windowTotal -= t.buckets[idx]
+				t.buckets[idx] = 0
+			}
 		}
+		t.lastWrite = bucketTime
 	}
 
 	t.buckets[writeIdx%len(t.buckets)] += value
@@ -113,10 +117,10 @@ func (t *TimedFloat64Buckets) WindowAverage(now time.Time) float64 {
 	switch d := now.Sub(t.lastWrite); {
 	case d <= 0:
 		// Current or future time - use current window total
-		numBuckets := math.Min(
-			float64(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1,
-			float64(len(t.buckets)))
-		return t.windowTotal / numBuckets
+		numBuckets := min(
+			int(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1,
+			len(t.buckets))
+		return t.windowTotal / float64(numBuckets)
 	case d < t.window:
 		// Recent past - remove outdated buckets
 		startIdx := t.timeToIndex(t.lastWrite)
@@ -125,10 +129,10 @@ func (t *TimedFloat64Buckets) WindowAverage(now time.Time) float64 {
 		for i := startIdx + 1; i <= endIdx; i++ {
 			total -= t.buckets[i%len(t.buckets)]
 		}
-		numBuckets := math.Min(
-			float64(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1,
-			float64(len(t.buckets)-(endIdx-startIdx)))
-		return total / numBuckets
+		numBuckets := min(
+			int(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1,
+			len(t.buckets)-(endIdx-startIdx))
+		return total / float64(numBuckets)
 	default:
 		// No data within window
 		return 0
@@ -159,7 +163,7 @@ func (t *TimedFloat64Buckets) ResizeWindow(newWindow time.Duration) {
 		return
 	}
 
-	numBuckets := int(math.Ceil(float64(newWindow) / float64(t.granularity)))
+	numBuckets := int((newWindow + t.granularity - 1) / t.granularity)
 	newBuckets := make([]float64, numBuckets)
 	newTotal := 0.0
 
@@ -170,7 +174,8 @@ func (t *TimedFloat64Buckets) ResizeWindow(newWindow time.Duration) {
 	if time.Now().Truncate(t.granularity).Sub(t.lastWrite) <= t.window {
 		oldNumBuckets := len(t.buckets)
 		tIdx := t.timeToIndex(t.lastWrite)
-		for range minInt(numBuckets, oldNumBuckets) {
+
+		for range min(numBuckets, oldNumBuckets) {
 			oldIdx := tIdx % oldNumBuckets
 			newIdx := tIdx % numBuckets
 			newBuckets[newIdx] = t.buckets[oldIdx]
@@ -231,14 +236,6 @@ func (t *TimeWindow) Current() int32 {
 // ResizeWindow changes the window duration.
 func (t *TimeWindow) ResizeWindow(newDuration time.Duration) {
 	t.window.ResizeWindow(newDuration)
-}
-
-// minInt returns the minimum of two integers.
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // MetricSnapshot represents a point-in-time view of metrics.
