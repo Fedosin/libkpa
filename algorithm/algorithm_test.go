@@ -18,6 +18,7 @@ package algorithm
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -475,5 +476,516 @@ func TestSlidingWindowAutoscaler_Update(t *testing.T) {
 	}
 	if currentSpec.ScaleDownDelay != 30*time.Second {
 		t.Errorf("Expected updated scale down delay 30s, got %v", currentSpec.ScaleDownDelay)
+	}
+}
+
+func TestSlidingWindowAutoscaler_RateLimiting(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        1.5, // Can only scale up by 50%
+		MaxScaleDownRate:      2.0, // Can scale down by 50%
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              20,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Test scale up rate limiting
+	snapshot1 := metrics.NewMetricSnapshot(
+		1000.0, // Would need 10 pods
+		1000.0,
+		4, // Current pods
+		now,
+	)
+	result1 := autoscaler.Scale(ctx, snapshot1, now)
+	// Should be limited to 4 * 1.5 = 6 pods
+	if result1.DesiredPodCount != 6 {
+		t.Errorf("Expected scale up to be rate-limited to 6 pods, got %d", result1.DesiredPodCount)
+	}
+
+	// Test scale down rate limiting
+	snapshot2 := metrics.NewMetricSnapshot(
+		100.0, // Would need 1 pod
+		100.0,
+		10, // Current pods
+		now.Add(time.Minute),
+	)
+	result2 := autoscaler.Scale(ctx, snapshot2, now.Add(time.Minute))
+	// Should be limited to 10 / 2.0 = 5 pods
+	if result2.DesiredPodCount != 5 {
+		t.Errorf("Expected scale down to be rate-limited to 5 pods, got %d", result2.DesiredPodCount)
+	}
+}
+
+func TestSlidingWindowAutoscaler_UnreachableState(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              0,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             false, // Service is unreachable
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Test scaling to zero when unreachable with MinScale=0
+	snapshot := metrics.NewMetricSnapshot(
+		0.0,
+		0.0,
+		3, // Current pods
+		now,
+	)
+	result := autoscaler.Scale(ctx, snapshot, now)
+
+	// With no metric data, should return invalid result
+	if result.ScaleValid {
+		t.Error("Expected invalid scale result with no metric data")
+	}
+
+	// Test with MinScale > 0 and some traffic
+	spec.MinScale = 2
+	autoscaler.Update(spec)
+
+	snapshot2 := metrics.NewMetricSnapshot(
+		100.0, // Some traffic
+		100.0,
+		3, // Current pods
+		now.Add(time.Second),
+	)
+	result2 := autoscaler.Scale(ctx, snapshot2, now.Add(time.Second))
+	// Should maintain at least MinScale even if unreachable
+	if result2.DesiredPodCount != 2 {
+		t.Errorf("Expected MinScale pods for unreachable service, got %d", result2.DesiredPodCount)
+	}
+}
+
+func TestSlidingWindowAutoscaler_RPSMetric(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.RPS, // Using RPS instead of Concurrency
+		TargetValue:           50.0,    // 50 RPS per pod
+		TotalValue:            100.0,   // Total capacity per pod
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Test with RPS metric
+	snapshot := metrics.NewMetricSnapshot(
+		250.0, // 250 RPS total
+		250.0,
+		3, // Current pods
+		now,
+	)
+	result := autoscaler.Scale(ctx, snapshot, now)
+
+	// Should scale to 250 / 50 = 5 pods
+	if result.DesiredPodCount != 5 {
+		t.Errorf("Expected 5 pods for 250 RPS with 50 RPS target, got %d", result.DesiredPodCount)
+	}
+}
+
+func TestSlidingWindowAutoscaler_ScaleToZero(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              0, // Allow scale to zero
+		MaxScale:              10,
+		ActivationScale:       3,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Test scaling to zero
+	snapshot1 := metrics.NewMetricSnapshot(
+		0.0,
+		0.0,
+		2, // Current pods
+		now,
+	)
+	result1 := autoscaler.Scale(ctx, snapshot1, now)
+
+	if result1.DesiredPodCount != 0 {
+		t.Errorf("Expected 0 pods with no traffic and MinScale=0, got %d", result1.DesiredPodCount)
+	}
+
+	// Test scaling from zero with activation scale
+	snapshot2 := metrics.NewMetricSnapshot(
+		50.0, // Some traffic arrives
+		50.0,
+		0, // Current pods
+		now.Add(time.Minute),
+	)
+	result2 := autoscaler.Scale(ctx, snapshot2, now.Add(time.Minute))
+
+	if result2.DesiredPodCount != 3 {
+		t.Errorf("Expected activation scale of 3 when scaling from zero, got %d", result2.DesiredPodCount)
+	}
+}
+
+func TestSlidingWindowAutoscaler_RapidMetricChanges(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        30 * time.Second,
+		MinScale:              1,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Simulate rapid metric changes
+	changes := []struct {
+		value    float64
+		expected int32
+		desc     string
+	}{
+		{300.0, 3, "initial state"},
+		{800.0, 8, "spike up"},
+		{200.0, 8, "drop but within scale-down delay"},
+		{900.0, 9, "spike up again"},
+		{100.0, 9, "drop again but still in delay"},
+	}
+
+	currentTime := now
+	for i, change := range changes {
+		snapshot := metrics.NewMetricSnapshot(
+			change.value,
+			change.value,
+			changes[max(0, i-1)].expected, // Use previous expected as current
+			currentTime,
+		)
+		result := autoscaler.Scale(ctx, snapshot, currentTime)
+
+		if result.DesiredPodCount != change.expected {
+			t.Errorf("%s: expected %d pods, got %d", change.desc, change.expected, result.DesiredPodCount)
+		}
+
+		currentTime = currentTime.Add(5 * time.Second)
+	}
+}
+
+func TestSlidingWindowAutoscaler_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     api.AutoscalerSpec
+		snapshot metrics.MetricSnapshot
+		expected int32
+		valid    bool
+	}{
+		{
+			name: "zero target value",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   10.0,
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      0.0, // Zero target value
+				TotalValue:       1000.0,
+				MinScale:         1,
+				MaxScale:         10,
+				Reachable:        true,
+			},
+			snapshot: *metrics.NewMetricSnapshot(
+				100.0, // stable value
+				100.0, // panic value
+				3,     // ready pods
+				time.Now(),
+			),
+			expected: 10, // Should hit max scale due to infinity from division by zero
+			valid:    true,
+		},
+		{
+			name: "negative metric values",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   10.0,
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      100.0,
+				TotalValue:       1000.0,
+				MinScale:         1,
+				MaxScale:         10,
+				Reachable:        true,
+			},
+			snapshot: *metrics.NewMetricSnapshot(
+				-50.0, // negative stable value
+				-50.0, // negative panic value
+				3,     // ready pods
+				time.Now(),
+			),
+			expected: 1, // Should scale to min
+			valid:    true,
+		},
+		{
+			name: "very large metric values",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   10.0,
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      100.0,
+				TotalValue:       1000.0,
+				MinScale:         1,
+				MaxScale:         1000,
+				Reachable:        true,
+			},
+			snapshot: *metrics.NewMetricSnapshot(
+				1000000.0, // very large stable value
+				1000000.0, // very large panic value
+				10,        // ready pods
+				time.Now(),
+			),
+			expected: 100, // Limited by rate limiting
+			valid:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			autoscaler := NewSlidingWindowAutoscaler(tt.spec)
+			ctx := context.Background()
+			now := time.Now()
+
+			result := autoscaler.Scale(ctx, &tt.snapshot, now)
+
+			if result.ScaleValid != tt.valid {
+				t.Errorf("Expected valid=%v, got %v", tt.valid, result.ScaleValid)
+			}
+			if tt.valid && result.DesiredPodCount != tt.expected {
+				t.Errorf("Expected %d pods, got %d", tt.expected, result.DesiredPodCount)
+			}
+		})
+	}
+}
+
+func TestSlidingWindowAutoscaler_PanicModeTransitions(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              20,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Enter panic mode
+	snapshot1 := metrics.NewMetricSnapshot(
+		300.0,
+		600.0, // Panic value needs 6 pods
+		3,     // Current pods
+		now,
+	)
+	result1 := autoscaler.Scale(ctx, snapshot1, now)
+	if !result1.InPanicMode {
+		t.Error("Should enter panic mode")
+	}
+
+	// Stay in panic mode even with lower stable value
+	snapshot2 := metrics.NewMetricSnapshot(
+		200.0, // Stable value dropped
+		400.0, // Still needs more pods than we have
+		6,
+		now.Add(30*time.Second),
+	)
+	result2 := autoscaler.Scale(ctx, snapshot2, now.Add(30*time.Second))
+	if !result2.InPanicMode {
+		t.Error("Should stay in panic mode")
+	}
+
+	// Exit panic mode after stable window
+	snapshot3 := metrics.NewMetricSnapshot(
+		300.0,
+		300.0, // Panic value normalized
+		6,
+		now.Add(65*time.Second), // After stable window
+	)
+	result3 := autoscaler.Scale(ctx, snapshot3, now.Add(65*time.Second))
+	if result3.InPanicMode {
+		t.Error("Should exit panic mode after stable window")
+	}
+}
+
+func TestSlidingWindowAutoscaler_ConcurrentAccess(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	ctx := context.Background()
+
+	// Run multiple goroutines to test concurrent access
+	done := make(chan bool)
+	errors := make(chan error, 10)
+
+	for i := range 10 {
+		go func(id int) {
+			defer func() { done <- true }()
+
+			now := time.Now()
+			snapshot := metrics.NewMetricSnapshot(
+				float64(100+id*10),
+				float64(100+id*10),
+				3,
+				now,
+			)
+
+			// Perform scaling
+			result := autoscaler.Scale(ctx, snapshot, now)
+			if !result.ScaleValid {
+				errors <- fmt.Errorf("goroutine %d: invalid scale result", id)
+			}
+
+			// Update spec
+			newSpec := spec
+			newSpec.TargetValue = float64(100 + id)
+			if err := autoscaler.Update(newSpec); err != nil {
+				errors <- fmt.Errorf("goroutine %d: update failed: %w", id, err)
+			}
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for range 10 {
+		<-done
+	}
+	close(errors)
+
+	// Check for errors
+	for err := range errors {
+		t.Error(err)
+	}
+}
+
+func TestSlidingWindowAutoscaler_InvalidConfigurations(t *testing.T) {
+	tests := []struct {
+		name        string
+		spec        api.AutoscalerSpec
+		shouldError bool
+	}{
+		{
+			name: "negative max scale up rate",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   -1.0, // Invalid
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      100.0,
+				MinScale:         1,
+				MaxScale:         10,
+			},
+			shouldError: false, // Should handle gracefully
+		},
+		{
+			name: "min scale greater than max scale",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   10.0,
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      100.0,
+				MinScale:         10,
+				MaxScale:         5, // Less than MinScale
+			},
+			shouldError: false, // Should handle gracefully
+		},
+		{
+			name: "negative stable window",
+			spec: api.AutoscalerSpec{
+				MaxScaleUpRate:   10.0,
+				MaxScaleDownRate: 2.0,
+				ScalingMetric:    api.Concurrency,
+				TargetValue:      100.0,
+				StableWindow:     -60 * time.Second, // Invalid
+				MinScale:         1,
+				MaxScale:         10,
+			},
+			shouldError: false, // Should handle gracefully
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Should not panic on creation
+			autoscaler := NewSlidingWindowAutoscaler(tt.spec)
+			if autoscaler == nil {
+				t.Error("Expected autoscaler to be created")
+			}
+		})
 	}
 }
