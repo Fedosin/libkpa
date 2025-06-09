@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"runtime"
 	"time"
 
 	"github.com/Fedosin/libkpa/algorithm"
@@ -30,6 +31,64 @@ import (
 	"github.com/Fedosin/libkpa/metrics"
 	"github.com/Fedosin/libkpa/transmitter"
 )
+
+// ProfilingStats tracks performance metrics
+type ProfilingStats struct {
+	ScalingDecisions     int
+	TotalScalingTime     time.Duration
+	MinScalingTime       time.Duration
+	MaxScalingTime       time.Duration
+	WindowOperationTime  time.Duration
+	MetricCollectionTime time.Duration
+	MemoryAllocations    []runtime.MemStats
+}
+
+func (p *ProfilingStats) RecordScalingTime(duration time.Duration) {
+	p.ScalingDecisions++
+	p.TotalScalingTime += duration
+	if p.MinScalingTime == 0 || duration < p.MinScalingTime {
+		p.MinScalingTime = duration
+	}
+	if duration > p.MaxScalingTime {
+		p.MaxScalingTime = duration
+	}
+}
+
+func (p *ProfilingStats) AverageScalingTime() time.Duration {
+	if p.ScalingDecisions == 0 {
+		return 0
+	}
+	return p.TotalScalingTime / time.Duration(p.ScalingDecisions)
+}
+
+func (p *ProfilingStats) PrintSummary() {
+	fmt.Println("\n=== Profiling Summary ===")
+	fmt.Printf("Total Scaling Decisions: %d\n", p.ScalingDecisions)
+	fmt.Printf("Average Scaling Time: %v\n", p.AverageScalingTime())
+	fmt.Printf("Min Scaling Time: %v\n", p.MinScalingTime)
+	fmt.Printf("Max Scaling Time: %v\n", p.MaxScalingTime)
+	fmt.Printf("Total Window Operations Time: %v\n", p.WindowOperationTime)
+	fmt.Printf("Total Metric Collection Time: %v\n", p.MetricCollectionTime)
+
+	if len(p.MemoryAllocations) > 0 {
+		first := p.MemoryAllocations[0]
+		last := p.MemoryAllocations[len(p.MemoryAllocations)-1]
+		fmt.Printf("\nMemory Usage:\n")
+		fmt.Printf("  Initial Heap: %.2f MB\n", float64(first.HeapAlloc)/1024/1024)
+		fmt.Printf("  Final Heap: %.2f MB\n", float64(last.HeapAlloc)/1024/1024)
+		fmt.Printf("  Peak Heap: %.2f MB\n", func() float64 {
+			max := uint64(0)
+			for _, m := range p.MemoryAllocations {
+				if m.HeapAlloc > max {
+					max = m.HeapAlloc
+				}
+			}
+			return float64(max) / 1024 / 1024
+		}())
+		fmt.Printf("  Total GC Runs: %d\n", last.NumGC-first.NumGC)
+		fmt.Printf("  Total GC Pause: %v\n", time.Duration(last.PauseTotalNs-first.PauseTotalNs))
+	}
+}
 
 // MockMetricCollector simulates collecting metrics from pods
 type MockMetricCollector struct {
@@ -102,12 +161,19 @@ func main() {
 	// Create a mock metric collector
 	collector := &MockMetricCollector{baseLoad: 80}
 
+	// Initialize profiling stats
+	profStats := &ProfilingStats{}
+
 	// Simulation parameters
 	ctx := context.Background()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	fmt.Println("Starting autoscaler simulation...")
+	// Memory profiling ticker
+	memTicker := time.NewTicker(5 * time.Second)
+	defer memTicker.Stop()
+
+	fmt.Println("Starting autoscaler simulation with profiling...")
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println()
 
@@ -129,9 +195,20 @@ func main() {
 
 	phaseIndex := 0
 	phaseStart := time.Now()
+	simulationStart := time.Now()
+
+	// Collect initial memory stats
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	profStats.MemoryAllocations = append(profStats.MemoryAllocations, memStats)
 
 	for {
 		select {
+		case <-memTicker.C:
+			// Collect memory stats periodically
+			runtime.ReadMemStats(&memStats)
+			profStats.MemoryAllocations = append(profStats.MemoryAllocations, memStats)
+
 		case <-ticker.C:
 			now := time.Now()
 
@@ -150,6 +227,9 @@ func main() {
 				}
 			}
 
+			// Time metric collection
+			collectionStart := time.Now()
+
 			// Collect metrics
 			podMetrics := collector.CollectMetrics()
 
@@ -161,6 +241,11 @@ func main() {
 				totalRPS += pm.RequestsPerSecond
 			}
 
+			profStats.MetricCollectionTime += time.Since(collectionStart)
+
+			// Time window operations
+			windowStart := time.Now()
+
 			// Record in windows
 			stableWindow.Record(now, totalConcurrency)
 			panicWindow.Record(now, totalConcurrency)
@@ -168,6 +253,8 @@ func main() {
 			// Get window averages
 			stableAvg := stableWindow.WindowAverage(now)
 			panicAvg := panicWindow.WindowAverage(now)
+
+			profStats.WindowOperationTime += time.Since(windowStart)
 
 			// Create metric snapshot
 			snapshot := metrics.NewMetricSnapshot(
@@ -177,15 +264,22 @@ func main() {
 				now,
 			)
 
+			// Time the scaling decision
+			scalingStart := time.Now()
+
 			// Get scaling recommendation
 			recommendation := autoscaler.Scale(ctx, snapshot, now)
 
-			// Log current state
-			fmt.Printf("[%s] Metrics: stable=%.1f, panic=%.1f, current=%d pods\n",
+			scalingDuration := time.Since(scalingStart)
+			profStats.RecordScalingTime(scalingDuration)
+
+			// Log current state with timing info
+			fmt.Printf("[%s] Metrics: stable=%.1f, panic=%.1f, current=%d pods (scaling took %v)\n",
 				now.Format("15:04:05"),
 				stableAvg,
 				panicAvg,
 				currentPods,
+				scalingDuration,
 			)
 
 			if recommendation.ScaleValid {
@@ -220,7 +314,12 @@ func main() {
 
 			// Exit after all phases
 			if phaseIndex >= len(loadPhases) {
-				fmt.Println("\nSimulation complete!")
+				// Collect final memory stats
+				runtime.ReadMemStats(&memStats)
+				profStats.MemoryAllocations = append(profStats.MemoryAllocations, memStats)
+
+				fmt.Printf("\nSimulation complete! Total time: %v\n", time.Since(simulationStart))
+				profStats.PrintSummary()
 				return
 			}
 
