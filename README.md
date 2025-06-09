@@ -45,7 +45,7 @@ func main() {
     }
     
     // Create the autoscaler
-    autoscaler := algorithm.NewSlidingWindowAutoscaler(&cfg.AutoscalerSpec)
+    autoscaler := algorithm.NewSlidingWindowAutoscaler(cfg.AutoscalerSpec)
     
     // Create a metric snapshot (in real usage, collect from pods)
     snapshot := metrics.NewMetricSnapshot(

@@ -70,7 +70,7 @@ type Autoscaler interface {
     Scale(ctx context.Context, metrics MetricSnapshot, now time.Time) ScaleRecommendation
     
     // Update autoscaler configuration
-    Update(spec *AutoscalerSpec) error
+    Update(spec AutoscalerSpec) error
     
     // Get current configuration
     GetSpec() AutoscalerSpec
@@ -108,7 +108,7 @@ type MetricAggregator interface {
 
 ```go
 // Define autoscaler configuration
-spec := &api.AutoscalerSpec{
+spec := api.AutoscalerSpec{
     MaxScaleUpRate:        10.0,
     MaxScaleDownRate:      2.0,
     ScalingMetric:         api.Concurrency,
@@ -168,7 +168,7 @@ if recommendation.ScaleValid {
 // Update configuration at runtime
 newSpec := autoscaler.GetSpec()
 newSpec.TargetValue = 150.0
-err := autoscaler.Update(&newSpec)
+err := autoscaler.Update(newSpec)
 if err != nil {
     log.Printf("Failed to update autoscaler: %v", err)
 }

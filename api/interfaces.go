@@ -28,7 +28,7 @@ type Autoscaler interface {
 	Scale(ctx context.Context, metrics MetricSnapshot, now time.Time) ScaleRecommendation
 
 	// Update reconfigures the autoscaler with a new spec.
-	Update(spec *AutoscalerSpec) error
+	Update(spec AutoscalerSpec) error
 
 	// GetSpec returns the current autoscaler spec.
 	GetSpec() AutoscalerSpec
