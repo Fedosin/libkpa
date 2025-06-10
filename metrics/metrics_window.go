@@ -22,8 +22,8 @@ import (
 	"time"
 )
 
-// TimedFloat64Buckets manages time-windowed buckets of float64 values.
-type TimedFloat64Buckets struct {
+// TimeWindow manages time-windowed buckets of float64 values.
+type TimeWindow struct {
 	mu sync.RWMutex
 
 	// buckets is a ring buffer indexed by timeToIndex() % len(buckets).
@@ -45,10 +45,10 @@ type TimedFloat64Buckets struct {
 	windowTotal float64
 }
 
-// NewTimedFloat64Buckets creates a new TimedFloat64Buckets with the given window and granularity.
-func NewTimedFloat64Buckets(window, granularity time.Duration) *TimedFloat64Buckets {
+// NewTimeWindow creates a new TimeWindow with the given window and granularity.
+func NewTimeWindow(window, granularity time.Duration) *TimeWindow {
 	numBuckets := (window + granularity - 1) / granularity
-	return &TimedFloat64Buckets{
+	return &TimeWindow{
 		buckets:     make([]float64, numBuckets),
 		granularity: granularity,
 		window:      window,
@@ -56,7 +56,7 @@ func NewTimedFloat64Buckets(window, granularity time.Duration) *TimedFloat64Buck
 }
 
 // Record adds a value at the given time to the buckets.
-func (t *TimedFloat64Buckets) Record(now time.Time, value float64) {
+func (t *TimeWindow) Record(now time.Time, value float64) {
 	bucketTime := now.Truncate(t.granularity)
 
 	t.mu.Lock()
@@ -105,12 +105,12 @@ func (t *TimedFloat64Buckets) Record(now time.Time, value float64) {
 }
 
 // WindowAverage returns the average value over the window.
-func (t *TimedFloat64Buckets) WindowAverage(now time.Time) float64 {
+func (t *TimeWindow) WindowAverage(now time.Time) float64 {
 	now = now.Truncate(t.granularity)
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	if t.IsEmptyLocked(now) {
+	if t.isEmptyLocked(now) {
 		return 0
 	}
 
@@ -140,21 +140,21 @@ func (t *TimedFloat64Buckets) WindowAverage(now time.Time) float64 {
 }
 
 // IsEmpty returns true if no data has been recorded within the window.
-func (t *TimedFloat64Buckets) IsEmpty(now time.Time) bool {
+func (t *TimeWindow) IsEmpty(now time.Time) bool {
 	now = now.Truncate(t.granularity)
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	return t.IsEmptyLocked(now)
+	return t.isEmptyLocked(now)
 }
 
-// IsEmptyLocked returns true if no data has been recorded within the window.
+// isEmptyLocked returns true if no data has been recorded within the window.
 // Caller must hold at least a read lock.
-func (t *TimedFloat64Buckets) IsEmptyLocked(now time.Time) bool {
+func (t *TimeWindow) isEmptyLocked(now time.Time) bool {
 	return now.Sub(t.lastWrite) > t.window
 }
 
 // ResizeWindow changes the window duration.
-func (t *TimedFloat64Buckets) ResizeWindow(newWindow time.Duration) {
+func (t *TimeWindow) ResizeWindow(newWindow time.Duration) {
 	if func() bool {
 		t.mu.RLock()
 		defer t.mu.RUnlock()
@@ -193,46 +193,8 @@ func (t *TimedFloat64Buckets) ResizeWindow(newWindow time.Duration) {
 }
 
 // timeToIndex converts a time to a bucket index.
-func (t *TimedFloat64Buckets) timeToIndex(tm time.Time) int {
+func (t *TimeWindow) timeToIndex(tm time.Time) int {
 	return int(tm.Unix()) / int(t.granularity.Seconds())
-}
-
-// TimeWindow represents a max/delay time window for scaling decisions.
-type TimeWindow struct {
-	window *TimedFloat64Buckets
-}
-
-// NewTimeWindow creates a new TimeWindow.
-func NewTimeWindow(duration, granularity time.Duration) *TimeWindow {
-	return &TimeWindow{
-		window: NewTimedFloat64Buckets(duration, granularity),
-	}
-}
-
-// Record adds a value at the current time.
-func (t *TimeWindow) Record(now time.Time, value int32) {
-	t.window.Record(now, float64(value))
-}
-
-// Current returns the current maximum value in the window.
-func (t *TimeWindow) Current() int32 {
-	// Find the maximum by iterating through buckets
-	t.window.mu.RLock()
-	defer t.window.mu.RUnlock()
-
-	maxValue := int32(0)
-	for _, v := range t.window.buckets {
-		val := int32(v)
-		if val > maxValue {
-			maxValue = val
-		}
-	}
-	return maxValue
-}
-
-// ResizeWindow changes the window duration.
-func (t *TimeWindow) ResizeWindow(newDuration time.Duration) {
-	t.window.ResizeWindow(newDuration)
 }
 
 // MetricSnapshot represents a point-in-time view of metrics.

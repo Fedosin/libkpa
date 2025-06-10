@@ -22,10 +22,10 @@ import (
 	"time"
 )
 
-func TestTimedFloat64Buckets_BasicOperations(t *testing.T) {
+func TestTimeWindow_BasicOperations(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -56,10 +56,10 @@ func TestTimedFloat64Buckets_BasicOperations(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_WindowExpiry(t *testing.T) {
+func TestTimeWindow_WindowExpiry(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -77,10 +77,10 @@ func TestTimedFloat64Buckets_WindowExpiry(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_MultipleValues(t *testing.T) {
+func TestTimeWindow_MultipleValues(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -95,10 +95,10 @@ func TestTimedFloat64Buckets_MultipleValues(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_ResizeWindow(t *testing.T) {
+func TestTimeWindow_ResizeWindow(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -124,10 +124,10 @@ func TestTimedFloat64Buckets_ResizeWindow(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_GapInData(t *testing.T) {
+func TestTimeWindow_GapInData(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -144,44 +144,6 @@ func TestTimedFloat64Buckets_GapInData(t *testing.T) {
 	expected := 5.0
 	if avg != expected {
 		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_MaxTracking(t *testing.T) {
-	window := NewTimeWindow(10*time.Second, 1*time.Second)
-
-	now := time.Now()
-
-	// Record values
-	window.Record(now, 5)
-	window.Record(now.Add(1*time.Second), 10)
-	window.Record(now.Add(2*time.Second), 3)
-	window.Record(now.Add(3*time.Second), 8)
-
-	// Should return maximum value
-	maxValue := window.Current()
-	if maxValue != 10 {
-		t.Errorf("Expected max 10, got %d", maxValue)
-	}
-}
-
-func TestTimeWindow_ResizeWindow(t *testing.T) {
-	window := NewTimeWindow(10*time.Second, 1*time.Second)
-
-	now := time.Now()
-
-	// Record values
-	for i := int32(1); i <= 10; i++ {
-		window.Record(now.Add(time.Duration(i)*time.Second), i)
-	}
-
-	// Resize window
-	window.ResizeWindow(5 * time.Second)
-
-	// Max should still be present if within new window
-	maxValue := window.Current()
-	if maxValue == 0 {
-		t.Error("Max should not be 0 after resize")
 	}
 }
 
@@ -206,8 +168,8 @@ func TestMetricSnapshot(t *testing.T) {
 	}
 }
 
-func BenchmarkTimedFloat64Buckets_Record(b *testing.B) {
-	buckets := NewTimedFloat64Buckets(60*time.Second, 1*time.Second)
+func BenchmarkTimeWindow_Record(b *testing.B) {
+	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
 	now := time.Now()
 
 	b.ResetTimer()
@@ -218,8 +180,8 @@ func BenchmarkTimedFloat64Buckets_Record(b *testing.B) {
 	}
 }
 
-func BenchmarkTimedFloat64Buckets_WindowAverage(b *testing.B) {
-	buckets := NewTimedFloat64Buckets(60*time.Second, 1*time.Second)
+func BenchmarkTimeWindow_WindowAverage(b *testing.B) {
+	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
 	now := time.Now()
 
 	// Pre-fill with data
@@ -233,10 +195,10 @@ func BenchmarkTimedFloat64Buckets_WindowAverage(b *testing.B) {
 	}
 }
 
-func TestTimedFloat64Buckets_EdgeCases(t *testing.T) {
+func TestTimeWindow_EdgeCases(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -255,10 +217,10 @@ func TestTimedFloat64Buckets_EdgeCases(t *testing.T) {
 	// This should be ignored or handled gracefully
 }
 
-func TestTimedFloat64Buckets_ConcurrentAccess(t *testing.T) {
+func TestTimeWindow_ConcurrentAccess(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 	done := make(chan bool)
@@ -289,10 +251,10 @@ func TestTimedFloat64Buckets_ConcurrentAccess(t *testing.T) {
 	// If we get here without deadlock or panic, the test passes
 }
 
-func TestTimedFloat64Buckets_RecordOldValues(t *testing.T) {
+func TestTimeWindow_RecordOldValues(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -309,10 +271,10 @@ func TestTimedFloat64Buckets_RecordOldValues(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_ZeroAndNegativeValues(t *testing.T) {
+func TestTimeWindow_ZeroAndNegativeValues(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -330,10 +292,10 @@ func TestTimedFloat64Buckets_ZeroAndNegativeValues(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_LargeValues(t *testing.T) {
+func TestTimeWindow_LargeValues(t *testing.T) {
 	window := 3 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -348,10 +310,10 @@ func TestTimedFloat64Buckets_LargeValues(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_FractionalValues(t *testing.T) {
+func TestTimeWindow_FractionalValues(t *testing.T) {
 	window := 3 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -368,10 +330,10 @@ func TestTimedFloat64Buckets_FractionalValues(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_ExactWindowBoundary(t *testing.T) {
+func TestTimeWindow_ExactWindowBoundary(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -394,10 +356,10 @@ func TestTimedFloat64Buckets_ExactWindowBoundary(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_WindowAverageWithFutureTime(t *testing.T) {
+func TestTimeWindow_WindowAverageWithFutureTime(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -415,9 +377,9 @@ func TestTimedFloat64Buckets_WindowAverageWithFutureTime(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_ResizeWindowEdgeCases(t *testing.T) {
+func TestTimeWindow_ResizeWindowEdgeCases(t *testing.T) {
 	t.Run("ResizeToSameSize", func(t *testing.T) {
-		buckets := NewTimedFloat64Buckets(10*time.Second, 1*time.Second)
+		buckets := NewTimeWindow(10*time.Second, 1*time.Second)
 		now := time.Now()
 
 		buckets.Record(now, 100)
@@ -431,7 +393,7 @@ func TestTimedFloat64Buckets_ResizeWindowEdgeCases(t *testing.T) {
 	})
 
 	t.Run("ResizeToLarger", func(t *testing.T) {
-		buckets := NewTimedFloat64Buckets(5*time.Second, 1*time.Second)
+		buckets := NewTimeWindow(5*time.Second, 1*time.Second)
 		now := time.Now()
 
 		// Fill current window
@@ -449,7 +411,7 @@ func TestTimedFloat64Buckets_ResizeWindowEdgeCases(t *testing.T) {
 	})
 
 	t.Run("ResizeAfterExpiry", func(t *testing.T) {
-		buckets := NewTimedFloat64Buckets(5*time.Second, 1*time.Second)
+		buckets := NewTimeWindow(5*time.Second, 1*time.Second)
 		now := time.Now()
 
 		buckets.Record(now, 100)
@@ -467,8 +429,8 @@ func TestTimedFloat64Buckets_ResizeWindowEdgeCases(t *testing.T) {
 	})
 }
 
-func TestTimedFloat64Buckets_ConcurrentResizeWindow(t *testing.T) {
-	buckets := NewTimedFloat64Buckets(10*time.Second, 1*time.Second)
+func TestTimeWindow_ConcurrentResizeWindow(t *testing.T) {
+	buckets := NewTimeWindow(10*time.Second, 1*time.Second)
 	now := time.Now()
 
 	done := make(chan bool)
@@ -507,10 +469,10 @@ func TestTimedFloat64Buckets_ConcurrentResizeWindow(t *testing.T) {
 	<-done
 }
 
-func TestTimedFloat64Buckets_FirstWriteUpdate(t *testing.T) {
+func TestTimeWindow_FirstWriteUpdate(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -525,95 +487,6 @@ func TestTimedFloat64Buckets_FirstWriteUpdate(t *testing.T) {
 	expected := 18.0
 	if avg != expected {
 		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_EmptyWindow(t *testing.T) {
-	window := NewTimeWindow(10*time.Second, 1*time.Second)
-
-	// Current should return 0 for empty window
-	if current := window.Current(); current != 0 {
-		t.Errorf("Empty window should return 0, got %d", current)
-	}
-}
-
-func TestTimeWindow_NegativeAndZeroValues(t *testing.T) {
-	window := NewTimeWindow(5*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Record various values including zero and negative
-	window.Record(now, -10)
-	window.Record(now.Add(1*time.Second), 0)
-	window.Record(now.Add(2*time.Second), 15)
-	window.Record(now.Add(3*time.Second), -5)
-
-	// Should track the maximum (15)
-	maxValue := window.Current()
-	if maxValue != 15 {
-		t.Errorf("Expected max 15, got %d", maxValue)
-	}
-}
-
-func TestTimeWindow_ConcurrentOperations(t *testing.T) {
-	window := NewTimeWindow(10*time.Second, 1*time.Second)
-	now := time.Now()
-	done := make(chan bool)
-
-	// Writer goroutine
-	go func() {
-		for i := int32(0); i < 100; i++ {
-			window.Record(now.Add(time.Duration(i)*10*time.Millisecond), i)
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Reader goroutine
-	go func() {
-		for range 100 {
-			window.Current()
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Resizer goroutine
-	go func() {
-		for i := range 10 {
-			window.ResizeWindow(time.Duration(5+i) * time.Second)
-			time.Sleep(10 * time.Millisecond)
-		}
-		done <- true
-	}()
-
-	// Wait for all to complete
-	<-done
-	<-done
-	<-done
-}
-
-func TestTimeWindow_ResizeEffectOnMax(t *testing.T) {
-	window := NewTimeWindow(10*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Record values spread across time
-	window.Record(now, 10)
-	window.Record(now.Add(3*time.Second), 30)
-	window.Record(now.Add(6*time.Second), 20)
-	window.Record(now.Add(9*time.Second), 40)
-
-	// Max should be 40
-	if maxValue := window.Current(); maxValue != 40 {
-		t.Errorf("Expected max 40, got %d", maxValue)
-	}
-
-	// Resize to smaller window that might exclude the max
-	window.ResizeWindow(3 * time.Second)
-
-	// Max might change after resize
-	newMax := window.Current()
-	if newMax == 0 {
-		t.Error("Max should not be 0 after resize if any values remain")
 	}
 }
 
@@ -692,35 +565,9 @@ func TestMinInt(t *testing.T) {
 
 // Additional Benchmarks
 
-func BenchmarkTimeWindow_Record(b *testing.B) {
-	window := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
 
-	b.ResetTimer()
-	i := 0
-	for b.Loop() {
-		window.Record(now.Add(time.Duration(i)*time.Millisecond), int32(i%100))
-		i++
-	}
-}
-
-func BenchmarkTimeWindow_Current(b *testing.B) {
-	window := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Pre-fill with data
-	for i := range 60 {
-		window.Record(now.Add(time.Duration(i)*time.Second), int32(i))
-	}
-
-	b.ResetTimer()
-	for b.Loop() {
-		_ = window.Current()
-	}
-}
-
-func BenchmarkTimedFloat64Buckets_ResizeWindow(b *testing.B) {
-	buckets := NewTimedFloat64Buckets(60*time.Second, 1*time.Second)
+func BenchmarkTimeWindow_ResizeWindow(b *testing.B) {
+	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
 	now := time.Now()
 
 	// Pre-fill with data
@@ -737,8 +584,8 @@ func BenchmarkTimedFloat64Buckets_ResizeWindow(b *testing.B) {
 	}
 }
 
-func BenchmarkTimedFloat64Buckets_ConcurrentAccess(b *testing.B) {
-	buckets := NewTimedFloat64Buckets(60*time.Second, 1*time.Second)
+func BenchmarkTimeWindow_ConcurrentAccess(b *testing.B) {
+	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
 	now := time.Now()
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -767,10 +614,10 @@ func BenchmarkMetricSnapshot_Creation(b *testing.B) {
 
 // Additional edge case tests for 100% coverage
 
-func TestTimedFloat64Buckets_WindowAverageRecentPast(t *testing.T) {
+func TestTimeWindow_WindowAverageRecentPast(t *testing.T) {
 	window := 10 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -792,11 +639,11 @@ func TestTimedFloat64Buckets_WindowAverageRecentPast(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_MinimumGranularity(t *testing.T) {
+func TestTimeWindow_MinimumGranularity(t *testing.T) {
 	// Test with minimum supported granularity (1 second)
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -813,11 +660,11 @@ func TestTimedFloat64Buckets_MinimumGranularity(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_SmallWindow(t *testing.T) {
+func TestTimeWindow_SmallWindow(t *testing.T) {
 	// Test with a small window (minimum granularity is 1 second)
 	window := 3 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -833,10 +680,10 @@ func TestTimedFloat64Buckets_SmallWindow(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_WindowAverageBeyondWindow(t *testing.T) {
+func TestTimeWindow_WindowAverageBeyondWindow(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -853,27 +700,11 @@ func TestTimedFloat64Buckets_WindowAverageBeyondWindow(t *testing.T) {
 	}
 }
 
-func TestTimeWindow_MultipleMaxValues(t *testing.T) {
-	window := NewTimeWindow(5*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Record multiple instances of the same max value
-	window.Record(now, 50)
-	window.Record(now.Add(1*time.Second), 50)
-	window.Record(now.Add(2*time.Second), 30)
-	window.Record(now.Add(3*time.Second), 50)
-
-	maxValue := window.Current()
-	if maxValue != 50 {
-		t.Errorf("Expected max 50, got %d", maxValue)
-	}
-}
-
-func TestTimedFloat64Buckets_StressTestLargeBuckets(t *testing.T) {
+func TestTimeWindow_StressTestLargeBuckets(t *testing.T) {
 	// Test with a large number of buckets
 	window := 1 * time.Hour
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now()
 
@@ -889,10 +720,10 @@ func TestTimedFloat64Buckets_StressTestLargeBuckets(t *testing.T) {
 	}
 }
 
-func TestTimedFloat64Buckets_RecordSameBucketAccumulation(t *testing.T) {
+func TestTimeWindow_RecordSameBucketAccumulation(t *testing.T) {
 	window := 5 * time.Second
 	granularity := 1 * time.Second
-	buckets := NewTimedFloat64Buckets(window, granularity)
+	buckets := NewTimeWindow(window, granularity)
 
 	now := time.Now().Truncate(time.Second)
 
@@ -912,7 +743,7 @@ func TestTimedFloat64Buckets_RecordSameBucketAccumulation(t *testing.T) {
 
 func TestResizeWindow_RaceCondition(t *testing.T) {
 	// Test for potential race conditions during resize
-	buckets := NewTimedFloat64Buckets(10*time.Second, 1*time.Second)
+	buckets := NewTimeWindow(10*time.Second, 1*time.Second)
 
 	done := make(chan bool)
 	errors := make(chan error, 100)

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
-	"github.com/Fedosin/libkpa/metrics"
+	"github.com/Fedosin/libkpa/delaywindow"
 )
 
 // SlidingWindowAutoscaler implements the sliding window autoscaling algorithm
@@ -40,14 +40,18 @@ type SlidingWindowAutoscaler struct {
 	maxPanicPods int32
 
 	// Delay window for scale-down decisions
-	delayWindow *metrics.TimeWindow
+	delayWindow *delaywindow.DelayWindow
 }
+
+const (
+	scaleDownDelayGranularity = 1 * time.Second
+)
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
 func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec) *SlidingWindowAutoscaler {
-	var delayWindow *metrics.TimeWindow
+	var delayWindow *delaywindow.DelayWindow
 	if spec.ScaleDownDelay > 0 {
-		delayWindow = metrics.NewTimeWindow(spec.ScaleDownDelay, 2*time.Second)
+		delayWindow = delaywindow.NewDelayWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
 	return &SlidingWindowAutoscaler{
@@ -149,8 +153,7 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	// Apply scale-down delay if configured
 	if a.spec.Reachable && a.delayWindow != nil {
 		a.delayWindow.Record(now, desiredPodCount)
-		delayedPodCount := a.delayWindow.Current()
-		desiredPodCount = delayedPodCount
+		desiredPodCount = a.delayWindow.CurrentMax()
 	}
 
 	// Apply min/max scale bounds
@@ -190,9 +193,9 @@ func (a *SlidingWindowAutoscaler) Update(spec api.AutoscalerSpec) error {
 	// Update delay window if needed
 	if spec.ScaleDownDelay > 0 {
 		if a.delayWindow == nil {
-			a.delayWindow = metrics.NewTimeWindow(spec.ScaleDownDelay, 2*time.Second)
+			a.delayWindow = delaywindow.NewDelayWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
 		} else {
-			a.delayWindow.ResizeWindow(spec.ScaleDownDelay)
+			a.delayWindow.Resize(spec.ScaleDownDelay)
 		}
 	} else {
 		a.delayWindow = nil
