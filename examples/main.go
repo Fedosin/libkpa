@@ -77,6 +77,7 @@ func main() {
 	cfg.PanicWindowPercentage = 10.0
 	cfg.MinScale = 1
 	cfg.MaxScale = 10
+	cfg.ScaleDownDelay = 5 * time.Second
 
 	fmt.Println("=== Knative Pod Autoscaler Library Demo ===")
 	fmt.Printf("Configuration:\n")
@@ -93,8 +94,8 @@ func main() {
 	metricTransmitter := transmitter.NewLogTransmitter(nil)
 
 	// Create metric windows for stable and panic averages
-	stableWindow := metrics.NewTimedFloat64Buckets(cfg.StableWindow, time.Second)
-	panicWindow := metrics.NewTimedFloat64Buckets(
+	stableWindow := metrics.NewTimeWindow(cfg.StableWindow, time.Second)
+	panicWindow := metrics.NewTimeWindow(
 		time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100),
 		time.Second,
 	)
