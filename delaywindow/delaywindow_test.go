@@ -286,7 +286,7 @@ func TestDelayWindow_ResizeContraction(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// Fill the window
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		dw.Record(baseTime.Add(time.Duration(i)*time.Second), int32(i+1))
 	}
 
@@ -359,7 +359,7 @@ func TestDelayWindow_ResizeCircularBufferMapping(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// Fill buffer to trigger wrap-around
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		dw.Record(baseTime.Add(time.Duration(i)*time.Second), int32(i*10))
 	}
 
@@ -434,7 +434,7 @@ func TestDelayWindow_ResizeMultipleTimes(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	// Add values across the window
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		dw.Record(baseTime.Add(time.Duration(i)*time.Second), int32((i+1)*5))
 	}
 

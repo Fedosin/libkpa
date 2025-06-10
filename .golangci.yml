@@ -29,6 +29,7 @@ linters:
     - gocritic
     - goprintffuncname
     - gosec
+    - intrange
     - misspell
     - nakedret
     - prealloc

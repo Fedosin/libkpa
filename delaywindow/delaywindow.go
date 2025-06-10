@@ -104,7 +104,7 @@ func (dw *DelayWindow) CurrentMax() int32 {
 	maxValue := int32(0)
 
 	// Scan all slots to find values within the window
-	for i := 0; i < dw.numSlots; i++ {
+	for i := range dw.numSlots {
 		// Check if this slot has a valid timestamp within the window
 		if !dw.slotTimes[i].IsZero() &&
 			!dw.slotTimes[i].Before(windowStart) &&
@@ -164,7 +164,7 @@ func (dw *DelayWindow) Resize(newWindowSize time.Duration) {
 	windowStart := now.Add(-newWindowSize + dw.granularity)
 
 	// Copy existing valid data to new arrays
-	for i := 0; i < dw.numSlots; i++ {
+	for i := range dw.numSlots {
 		// Check if this slot has valid data within the new window
 		if !dw.slotTimes[i].IsZero() &&
 			!dw.slotTimes[i].Before(windowStart) &&
