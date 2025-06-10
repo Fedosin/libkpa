@@ -62,7 +62,7 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	defer a.mu.Unlock()
 
 	// Get current ready pod count
-	readyPodCount := float64(snapshot.ReadyPodCount())
+	readyPodCount := snapshot.ReadyPodCount()
 	if readyPodCount == 0 {
 		readyPodCount = 1 // Avoid division by zero
 	}
@@ -79,32 +79,32 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	}
 
 	// Calculate scale limits based on current pod count
-	maxScaleUp := math.Ceil(a.spec.MaxScaleUpRate * readyPodCount)
-	maxScaleDown := float64(0)
+	maxScaleUp := int32(math.Ceil(a.spec.MaxScaleUpRate * float64(readyPodCount)))
+	maxScaleDown := int32(0)
 	if a.spec.Reachable {
-		maxScaleDown = math.Floor(readyPodCount / a.spec.MaxScaleDownRate)
+		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.spec.MaxScaleDownRate))
 	}
 
 	// Calculate desired pod counts
-	desiredStablePodCount := math.Ceil(observedStableValue / a.spec.TargetValue)
-	desiredPanicPodCount := math.Ceil(observedPanicValue / a.spec.TargetValue)
+	desiredStablePodCount := int32(math.Ceil(observedStableValue / a.spec.TargetValue))
+	desiredPanicPodCount := int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
 
 	// Apply scale limits
-	desiredStablePodCount = math.Min(math.Max(desiredStablePodCount, maxScaleDown), maxScaleUp)
-	desiredPanicPodCount = math.Min(math.Max(desiredPanicPodCount, maxScaleDown), maxScaleUp)
+	desiredStablePodCount = min(max(desiredStablePodCount, maxScaleDown), maxScaleUp)
+	desiredPanicPodCount = min(max(desiredPanicPodCount, maxScaleDown), maxScaleUp)
 
 	// Apply activation scale if needed
 	if a.spec.ActivationScale > 1 {
-		if desiredStablePodCount > 0 && float64(a.spec.ActivationScale) > desiredStablePodCount {
-			desiredStablePodCount = float64(a.spec.ActivationScale)
+		if desiredStablePodCount > 0 && a.spec.ActivationScale > desiredStablePodCount {
+			desiredStablePodCount = a.spec.ActivationScale
 		}
-		if desiredPanicPodCount > 0 && float64(a.spec.ActivationScale) > desiredPanicPodCount {
-			desiredPanicPodCount = float64(a.spec.ActivationScale)
+		if desiredPanicPodCount > 0 && a.spec.ActivationScale > desiredPanicPodCount {
+			desiredPanicPodCount = a.spec.ActivationScale
 		}
 	}
 
 	// Check panic mode conditions
-	isOverPanicThreshold := desiredPanicPodCount/readyPodCount >= a.spec.PanicThreshold
+	isOverPanicThreshold := float64(desiredPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state
@@ -124,11 +124,11 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	}
 
 	// Determine final desired pod count
-	desiredPodCount := int32(desiredStablePodCount)
+	desiredPodCount := desiredStablePodCount
 	if inPanicMode {
 		// Use the higher of stable or panic pod count
-		if int32(desiredPanicPodCount) > desiredPodCount {
-			desiredPodCount = int32(desiredPanicPodCount)
+		if desiredPanicPodCount > desiredPodCount {
+			desiredPodCount = desiredPanicPodCount
 		}
 		// Never scale down in panic mode
 		if desiredPodCount > a.maxPanicPods {
