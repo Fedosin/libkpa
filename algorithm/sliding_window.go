@@ -86,8 +86,16 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	}
 
 	// Calculate desired pod counts
-	desiredStablePodCount := int32(math.Ceil(observedStableValue / a.spec.TargetValue))
-	desiredPanicPodCount := int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
+	var desiredStablePodCount, desiredPanicPodCount int32
+	if a.spec.TargetValue == 0 {
+		// When target value is zero, any positive metric value would require infinite pods
+		// So we set to a very large value that will be clamped by rate limits and max scale
+		desiredStablePodCount = math.MaxInt32
+		desiredPanicPodCount = math.MaxInt32
+	} else {
+		desiredStablePodCount = int32(math.Ceil(observedStableValue / a.spec.TargetValue))
+		desiredPanicPodCount = int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
+	}
 
 	// Apply scale limits
 	desiredStablePodCount = min(max(desiredStablePodCount, maxScaleDown), maxScaleUp)
