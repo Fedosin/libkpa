@@ -211,8 +211,7 @@ func NewTimeWindow(duration, granularity time.Duration) *TimeWindow {
 
 // Record adds a value at the current time.
 func (t *TimeWindow) Record(now time.Time, value int32) {
-	// For max window, we record negative values and negate on retrieval
-	t.window.Record(now, -float64(value))
+	t.window.Record(now, float64(value))
 }
 
 // Current returns the current maximum value in the window.
@@ -223,11 +222,9 @@ func (t *TimeWindow) Current() int32 {
 
 	maxValue := int32(0)
 	for _, v := range t.window.buckets {
-		if v < 0 { // Remember we store negative values
-			val := int32(-v)
-			if val > maxValue {
-				maxValue = val
-			}
+		val := int32(v)
+		if val > maxValue {
+			maxValue = val
 		}
 	}
 	return maxValue
