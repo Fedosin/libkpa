@@ -104,6 +104,40 @@ Optionally scale deployments to zero pods when idle, with configurable grace per
 
 See the [examples/](examples/) directory for a complete example of integrating libkpa into a Kubernetes controller.
 
+## Performance and Profiling
+
+The library includes comprehensive profiling support to help you understand the performance characteristics of the autoscaler:
+
+- **Basic profiling** in the main example tracks execution time, memory usage, and component delays
+- **Advanced profiling** with Go's built-in profiling tools (CPU, memory, execution trace)
+- **Component-level timing** to identify bottlenecks in window operations, metric collection, etc.
+
+Run the profiling example:
+```bash
+# Basic profiling with visual timing
+go run examples/main.go
+
+# CPU profiling
+go run examples/profiling/main.go -cpuprofile=cpu.prof
+
+# Memory profiling  
+go run examples/profiling/main.go -memprofile=mem.prof
+
+# Live profiling server
+go run examples/profiling/main.go -pprof=:6060
+
+# Custom duration and frequency
+go run examples/profiling/main.go -duration=5m -interval=50ms
+```
+
+See [examples/profiling/README.md](examples/profiling/README.md) for detailed profiling documentation.
+
+### Typical Performance
+
+- **Scaling decisions**: < 200μs average (microseconds)
+- **Memory usage**: Proportional to window size, typically < 5MB for standard configurations
+- **CPU usage**: Minimal, mostly dependent on metric collection frequency
+
 ## Configuration
 
 The library can be configured through environment variables (with `AUTOSCALER_` prefix) or programmatically. Key settings include:
