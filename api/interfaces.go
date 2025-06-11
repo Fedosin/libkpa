@@ -25,7 +25,7 @@ import (
 type Autoscaler interface {
 	// Scale calculates the desired scale based on the provided metrics and time.
 	// It returns a ScaleRecommendation with the suggested pod count and other details.
-	Scale(ctx context.Context, metrics MetricSnapshot, now time.Time) ScaleRecommendation
+	Scale(metrics MetricSnapshot, now time.Time) ScaleRecommendation
 
 	// Update reconfigures the autoscaler with a new spec.
 	Update(spec AutoscalerSpec) error

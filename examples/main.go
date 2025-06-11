@@ -179,7 +179,7 @@ func main() {
 			)
 
 			// Get scaling recommendation
-			recommendation := autoscaler.Scale(ctx, snapshot, now)
+			recommendation := autoscaler.Scale(snapshot, now)
 
 			// Log current state
 			fmt.Printf("[%s] Metrics: stable=%.1f, panic=%.1f, current=%d pods\n",
