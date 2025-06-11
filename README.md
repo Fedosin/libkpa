@@ -56,7 +56,7 @@ func main() {
     )
     
     // Get scaling recommendation
-    recommendation := autoscaler.Scale(context.Background(), snapshot, time.Now())
+    recommendation := autoscaler.Scale(snapshot, time.Now())
     
     if recommendation.ScaleValid {
         fmt.Printf("Desired pods: %d (current: %d)\n", 

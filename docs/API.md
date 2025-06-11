@@ -67,7 +67,7 @@ The main interface for the autoscaler:
 ```go
 type Autoscaler interface {
     // Calculate desired scale based on metrics
-    Scale(ctx context.Context, metrics MetricSnapshot, now time.Time) ScaleRecommendation
+    Scale(metrics MetricSnapshot, now time.Time) ScaleRecommendation
     
     // Update autoscaler configuration
     Update(spec AutoscalerSpec) error
@@ -150,7 +150,7 @@ snapshot := metrics.NewMetricSnapshot(
 
 ```go
 ctx := context.Background()
-recommendation := autoscaler.Scale(ctx, snapshot, time.Now())
+recommendation := autoscaler.Scale(snapshot, time.Now())
 
 if recommendation.ScaleValid {
     fmt.Printf("Current pods: %d\n", recommendation.CurrentPodCount)
@@ -200,13 +200,13 @@ func (c *Controller) reconcile(deployment *appsv1.Deployment) error {
     snapshot := c.createSnapshot(metrics)
     
     // Get recommendation
-    recommendation := c.autoscaler.Scale(ctx, snapshot, time.Now())
+    recommendation := c.autoscaler.Scale(snapshot, time.Now())
     
     if recommendation.ScaleValid {
         // Update deployment
         deployment.Spec.Replicas = &recommendation.DesiredPodCount
         _, err := c.client.AppsV1().Deployments(deployment.Namespace).
-            Update(ctx, deployment, metav1.UpdateOptions{})
+            Update(deployment, metav1.UpdateOptions{})
         return err
     }
     

@@ -18,7 +18,6 @@ limitations under the License.
 package algorithm
 
 import (
-	"context"
 	"math"
 	"sync"
 	"time"
@@ -61,7 +60,7 @@ func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec) *SlidingWindowAutoscale
 }
 
 // Scale calculates the desired scale based on current metrics.
-func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.MetricSnapshot, now time.Time) api.ScaleRecommendation {
+func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Time) api.ScaleRecommendation {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
