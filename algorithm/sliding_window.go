@@ -76,7 +76,7 @@ func (a *SlidingWindowAutoscaler) Scale(ctx context.Context, snapshot api.Metric
 	observedPanicValue := snapshot.PanicValue()
 
 	// If no data, return invalid recommendation
-	if observedStableValue == 0 && observedPanicValue == 0 {
+	if observedStableValue < 0 || observedPanicValue < 0 {
 		return api.ScaleRecommendation{
 			ScaleValid: false,
 		}

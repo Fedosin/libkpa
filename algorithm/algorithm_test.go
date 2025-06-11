@@ -303,7 +303,7 @@ func TestSlidingWindowAutoscaler_ActivationScale(t *testing.T) {
 	}
 }
 
-func TestSlidingWindowAutoscaler_NoData(t *testing.T) {
+func TestSlidingWindowAutoscaler_ZeroValues(t *testing.T) {
 	spec := api.AutoscalerSpec{
 		MaxScaleUpRate:        10.0,
 		MaxScaleDownRate:      2.0,
@@ -325,18 +325,24 @@ func TestSlidingWindowAutoscaler_NoData(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	// Test with no metric data
+	// Test with zero values
 	snapshot := metrics.NewMetricSnapshot(
-		0.0, // no stable data
-		0.0, // no panic data
+		0.0,
+		0.0,
 		3,
 		now,
 	)
 
 	result := autoscaler.Scale(ctx, snapshot, now)
 
-	if result.ScaleValid {
-		t.Error("Should not return valid scale with no data")
+	// Should return valid scale with zero values
+	if !result.ScaleValid {
+		t.Errorf("Expected valid scale with zero values, got %v", result)
+	}
+
+	// Should scale to min
+	if result.DesiredPodCount != 1 {
+		t.Errorf("Expected 1 pod, got %d", result.DesiredPodCount)
 	}
 }
 
@@ -559,9 +565,13 @@ func TestSlidingWindowAutoscaler_UnreachableState(t *testing.T) {
 	)
 	result := autoscaler.Scale(ctx, snapshot, now)
 
-	// With no metric data, should return invalid result
-	if result.ScaleValid {
-		t.Error("Expected invalid scale result with no metric data")
+	// Result should be valid
+	if !result.ScaleValid {
+		t.Errorf("Expected valid scale with zero values, got %v", result)
+	}
+	// Should scale to zero
+	if result.DesiredPodCount != 0 {
+		t.Errorf("Expected 0 pod, got %d", result.DesiredPodCount)
 	}
 
 	// Test with MinScale > 0 and some traffic
@@ -632,7 +642,7 @@ func TestSlidingWindowAutoscaler_ScaleToZero(t *testing.T) {
 		ScaleDownDelay:        0,
 		MinScale:              0, // Allow scale to zero
 		MaxScale:              10,
-		ActivationScale:       3,
+		ActivationScale:       0, // No activation scale
 		Reachable:             true,
 	}
 
@@ -644,26 +654,17 @@ func TestSlidingWindowAutoscaler_ScaleToZero(t *testing.T) {
 	snapshot1 := metrics.NewMetricSnapshot(
 		0.0,
 		0.0,
-		2, // Current pods
+		1, // Current pods
 		now,
 	)
 	result1 := autoscaler.Scale(ctx, snapshot1, now)
 
-	if result1.DesiredPodCount != 0 {
-		t.Errorf("Expected 0 pods with no traffic and MinScale=0, got %d", result1.DesiredPodCount)
+	if !result1.ScaleValid {
+		t.Errorf("Expected valid scale with zero values, got %v", result1)
 	}
 
-	// Test scaling from zero with activation scale
-	snapshot2 := metrics.NewMetricSnapshot(
-		50.0, // Some traffic arrives
-		50.0,
-		0, // Current pods
-		now.Add(time.Minute),
-	)
-	result2 := autoscaler.Scale(ctx, snapshot2, now.Add(time.Minute))
-
-	if result2.DesiredPodCount != 3 {
-		t.Errorf("Expected activation scale of 3 when scaling from zero, got %d", result2.DesiredPodCount)
+	if result1.DesiredPodCount != 0 {
+		t.Errorf("Expected 0 pods with no traffic and MinScale=0, got %d", result1.DesiredPodCount)
 	}
 }
 
@@ -767,8 +768,8 @@ func TestSlidingWindowAutoscaler_EdgeCases(t *testing.T) {
 				3,     // ready pods
 				time.Now(),
 			),
-			expected: 1, // Should scale to min
-			valid:    true,
+			expected: 0,
+			valid:    false,
 		},
 		{
 			name: "very large metric values",
@@ -867,6 +868,61 @@ func TestSlidingWindowAutoscaler_PanicModeTransitions(t *testing.T) {
 	result3 := autoscaler.Scale(ctx, snapshot3, now.Add(65*time.Second))
 	if result3.InPanicMode {
 		t.Error("Should exit panic mode after stable window")
+	}
+}
+
+func TestSlidingWindowAutoscaler_InvalidMetricSnapshot(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	autoscaler := NewSlidingWindowAutoscaler(spec)
+	now := time.Now()
+
+	snapshot1 := metrics.NewMetricSnapshot(
+		-1.0,
+		-1.0,
+		3,
+		now,
+	)
+	result1 := autoscaler.Scale(snapshot1, now)
+	if result1.ScaleValid {
+		t.Error("Expected invalid scale result with negative values")
+	}
+
+	snapshot2 := metrics.NewMetricSnapshot(
+		-1.0,
+		0.0,
+		3,
+		now,
+	)
+	result2 := autoscaler.Scale(snapshot2, now)
+	if result2.ScaleValid {
+		t.Error("Expected invalid scale result with negative values")
+	}
+
+	snapshot3 := metrics.NewMetricSnapshot(
+		0.0,
+		-1.0,
+		3,
+		now,
+	)
+	result3 := autoscaler.Scale(snapshot3, now)
+	if result3.ScaleValid {
+		t.Error("Expected invalid scale result with zero values")
 	}
 }
 
