@@ -65,7 +65,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	defer a.mu.Unlock()
 
 	// Get current ready pod count
-	readyPodCount := snapshot.ReadyPodCount()
+	readyPodCount := float64(snapshot.ReadyPodCount())
 	if readyPodCount == 0 {
 		readyPodCount = 1 // Avoid division by zero
 	}
@@ -82,28 +82,25 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Calculate scale limits based on current pod count
-	maxScaleUp := int32(math.Ceil(a.spec.MaxScaleUpRate * float64(readyPodCount)))
-	maxScaleDown := int32(0)
+	maxScaleUp := math.Ceil(a.spec.MaxScaleUpRate * float64(readyPodCount))
+	maxScaleDown := 0.
 	if a.spec.Reachable {
-		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.spec.MaxScaleDownRate))
+		maxScaleDown = math.Floor(float64(readyPodCount) / a.spec.MaxScaleDownRate)
 	}
 
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
-	var rawStablePodCount, rawPanicPodCount int32
+	var rawStablePodCount, rawPanicPodCount float64
 
 	if a.spec.TargetValue == 0 {
-		// When target value is zero, any positive metric value would require infinite pods
-		// So we set to a very large value that will be clamped by rate limits and max scale
-		rawStablePodCount = math.MaxInt32
-		rawPanicPodCount = math.MaxInt32
-	} else {
-		rawStablePodCount = int32(math.Ceil(observedStableValue / a.spec.TargetValue))
-		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
+		panic("target value is zero")
 	}
 
+	rawStablePodCount = math.Ceil(observedStableValue / a.spec.TargetValue)
+	rawPanicPodCount = math.Ceil(observedPanicValue / a.spec.TargetValue)
+
 	// Apply scale limits
-	desiredStablePodCount := min(max(rawStablePodCount, maxScaleDown), maxScaleUp)
-	desiredPanicPodCount := min(max(rawPanicPodCount, maxScaleDown), maxScaleUp)
+	desiredStablePodCount := int32(min(max(rawStablePodCount, maxScaleDown), maxScaleUp))
+	desiredPanicPodCount := int32(min(max(rawPanicPodCount, maxScaleDown), maxScaleUp))
 
 	// Apply activation scale if needed
 	if a.spec.ActivationScale > 1 {
@@ -118,7 +115,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Check panic mode conditions
-	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
+	isOverPanicThreshold := rawPanicPodCount/readyPodCount >= a.spec.PanicThreshold
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state
