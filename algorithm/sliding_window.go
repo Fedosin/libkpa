@@ -118,7 +118,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Check panic mode conditions
-	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
+	isOverPanicThreshold := float64(desiredPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state

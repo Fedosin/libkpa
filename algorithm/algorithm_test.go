@@ -518,8 +518,7 @@ func TestSlidingWindowAutoscaler_RateLimiting(t *testing.T) {
 		10, // Current pods
 		now.Add(time.Minute),
 	)
-	// Add 2 minutes to leave panic mode
-	result2 := autoscaler.Scale(snapshot2, now.Add(2*time.Minute))
+	result2 := autoscaler.Scale(snapshot2, now.Add(time.Minute))
 	// Should be limited to 10 / 2.0 = 5 pods
 	if result2.DesiredPodCount != 5 {
 		t.Errorf("Expected scale down to be rate-limited to 5 pods, got %d", result2.DesiredPodCount)
