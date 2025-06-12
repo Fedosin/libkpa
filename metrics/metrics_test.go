@@ -17,764 +17,643 @@ limitations under the License.
 package metrics
 
 import (
+	"fmt"
 	"math"
+	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 )
 
-func TestTimeWindow_BasicOperations(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+const granularity = time.Second
 
-	now := time.Now()
-
-	// Test empty bucket
-	if !buckets.IsEmpty(now) {
-		t.Error("New bucket should be empty")
-	}
-	if avg := buckets.WindowAverage(now); avg != 0 {
-		t.Errorf("Empty bucket average should be 0, got %f", avg)
-	}
-
-	// Record some values
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(1*time.Second), 20)
-	buckets.Record(now.Add(2*time.Second), 30)
-
-	// Test not empty
-	if buckets.IsEmpty(now.Add(2 * time.Second)) {
-		t.Error("Bucket should not be empty after recording")
-	}
-
-	// Test average
-	avg := buckets.WindowAverage(now.Add(2 * time.Second))
-	// 3 buckets used, average should be (10 + 20 + 30) / 3 = 20.0
-	expected := 20.0
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_WindowExpiry(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Record values
-	buckets.Record(now, 100)
-
-	// Check within window
-	if buckets.IsEmpty(now.Add(4 * time.Second)) {
-		t.Error("Should not be empty within window")
-	}
-
-	// Check after window expires
-	if !buckets.IsEmpty(now.Add(6 * time.Second)) {
-		t.Error("Should be empty after window expires")
-	}
-}
-
-func TestTimeWindow_MultipleValues(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Record multiple values in same bucket
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(500*time.Millisecond), 20) // Same bucket due to truncation
-
-	avg := buckets.WindowAverage(now.Add(500 * time.Millisecond))
-	expected := 30.0 // Both values (10+20) are in the same bucket, and we have only 1 bucket
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_ResizeWindow(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Record values (1, 2, 3, ..., 10)
-	for i := range 10 {
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
-	}
-
-	// Check average before resize (all 10 values: 1+2+...+10 = 55, avg = 5.5)
-	avg1 := buckets.WindowAverage(now.Add(9 * time.Second))
-
-	// Resize to smaller window
-	buckets.ResizeWindow(5 * time.Second)
-
-	// After resize, ResizeWindow keeps the most recent values based on lastWrite
-	// The resize will keep recent buckets, so the average might actually increase
-	// since recent values (6,7,8,9,10) have higher numbers
-	avg2 := buckets.WindowAverage(now.Add(9 * time.Second))
-
-	// Just verify that resize had an effect
-	if avg1 == avg2 {
-		t.Errorf("Average should change after resizing window: before=%f, after=%f", avg1, avg2)
-	}
-}
-
-func TestTimeWindow_GapInData(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Record with gaps
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(5*time.Second), 20)
-
-	// Check at the time of second recording
-	avg := buckets.WindowAverage(now.Add(5 * time.Second))
-	// We have values at t=0 (10) and t=5 (20), with gaps at t=1,2,3,4 (zeros)
-	// Total = 10 + 0 + 0 + 0 + 0 + 20 = 30
-	// Buckets = 6
-	// Average = 30/6 = 5
-	expected := 5.0
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestMetricSnapshot(t *testing.T) {
-	now := time.Now()
-	snapshot := NewMetricSnapshot(100.0, 150.0, 5, now)
-
-	if snapshot.StableValue() != 100.0 {
-		t.Errorf("Expected stable value 100.0, got %f", snapshot.StableValue())
-	}
-
-	if snapshot.PanicValue() != 150.0 {
-		t.Errorf("Expected panic value 150.0, got %f", snapshot.PanicValue())
-	}
-
-	if snapshot.ReadyPodCount() != 5 {
-		t.Errorf("Expected 5 ready pods, got %d", snapshot.ReadyPodCount())
-	}
-
-	if !snapshot.Timestamp().Equal(now) {
-		t.Errorf("Expected timestamp %v, got %v", now, snapshot.Timestamp())
-	}
-}
-
-func BenchmarkTimeWindow_Record(b *testing.B) {
-	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
-
-	b.ResetTimer()
-	i := 0
-	for b.Loop() {
-		buckets.Record(now.Add(time.Duration(i)*time.Millisecond), float64(i))
-		i++
-	}
-}
-
-func BenchmarkTimeWindow_WindowAverage(b *testing.B) {
-	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Pre-fill with data
-	for i := range 60 {
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i))
-	}
-
-	b.ResetTimer()
-	for b.Loop() {
-		buckets.WindowAverage(now.Add(60 * time.Second))
-	}
-}
-
-func TestTimeWindow_EdgeCases(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Test recording at exact window boundary
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(10*time.Second), 20) // Exactly at window edge
-
-	// The second value should be in a new window
-	avg := buckets.WindowAverage(now.Add(10 * time.Second))
-	if avg != 20.0 {
-		t.Errorf("Expected average 20.0 for new window, got %f", avg)
-	}
-
-	// Test negative time progression (shouldn't happen in practice)
-	buckets.Record(now.Add(5*time.Second), 30)
-	// This should be ignored or handled gracefully
-}
-
-func TestTimeWindow_ConcurrentAccess(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-	done := make(chan bool)
-
-	// Writer goroutine
-	go func() {
-		for i := range 100 {
-			buckets.Record(now.Add(time.Duration(i)*time.Millisecond), float64(i))
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Reader goroutine
-	go func() {
-		for range 100 {
-			buckets.WindowAverage(now)
-			buckets.IsEmpty(now)
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Wait for both to complete
-	<-done
-	<-done
-
-	// If we get here without deadlock or panic, the test passes
-}
-
-func TestTimeWindow_RecordOldValues(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Record initial value
-	buckets.Record(now, 100)
-
-	// Try to record a value older than window
-	buckets.Record(now.Add(-10*time.Second), 200)
-
-	// Old value should be ignored
-	avg := buckets.WindowAverage(now)
-	if avg != 100 {
-		t.Errorf("Old values should be ignored, expected 100, got %f", avg)
-	}
-}
-
-func TestTimeWindow_ZeroAndNegativeValues(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Record zero, negative, and positive values
-	buckets.Record(now, 0)
-	buckets.Record(now.Add(1*time.Second), -10)
-	buckets.Record(now.Add(2*time.Second), 20)
-	buckets.Record(now.Add(3*time.Second), -5)
-
-	avg := buckets.WindowAverage(now.Add(3 * time.Second))
-	// Average should be (0 + (-10) + 20 + (-5)) / 4 = 5 / 4 = 1.25
-	expected := 1.25
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_LargeValues(t *testing.T) {
-	window := 3 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Record very large values
-	largeValue := math.MaxFloat64 / 10 // Avoid overflow
-	buckets.Record(now, largeValue)
-	buckets.Record(now.Add(1*time.Second), largeValue)
-
-	avg := buckets.WindowAverage(now.Add(1 * time.Second))
-	if avg != largeValue {
-		t.Errorf("Expected average %e, got %e", largeValue, avg)
-	}
-}
-
-func TestTimeWindow_FractionalValues(t *testing.T) {
-	window := 3 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	// Record fractional values
-	buckets.Record(now, 1.1)
-	buckets.Record(now.Add(1*time.Second), 2.2)
-	buckets.Record(now.Add(2*time.Second), 3.3)
-
-	avg := buckets.WindowAverage(now.Add(2 * time.Second))
-	expected := 2.2 // (1.1 + 2.2 + 3.3) / 3
-	tolerance := 0.0001
-	if math.Abs(avg-expected) > tolerance {
-		t.Errorf("Expected average ~%f, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_ExactWindowBoundary(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Fill exactly the window
-	for i := range 5 {
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
-	}
-
-	// Check at exact window end
-	avg := buckets.WindowAverage(now.Add(4 * time.Second))
-	expected := 3.0 // (1+2+3+4+5)/5
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-
-	// Check after window expires (need to account for truncation)
-	// The last write was at now+4s, so window expires at now+4s+5s = now+9s
-	if !buckets.IsEmpty(now.Add(10 * time.Second)) {
-		t.Error("Should be empty after window expires")
-	}
-}
-
-func TestTimeWindow_WindowAverageWithFutureTime(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now()
-
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(1*time.Second), 20)
-
-	// Query with future time (within window)
-	futureTime := now.Add(3 * time.Second)
-	avg := buckets.WindowAverage(futureTime)
-
-	// Should still include recorded values
-	expected := 15.0 // (10 + 20) / 2
-	if avg != expected {
-		t.Errorf("Expected average %f for future time query, got %f", expected, avg)
-	}
-}
-
-func TestTimeWindow_ResizeWindowEdgeCases(t *testing.T) {
-	t.Run("ResizeToSameSize", func(t *testing.T) {
-		buckets := NewTimeWindow(10*time.Second, 1*time.Second)
-		now := time.Now()
-
-		buckets.Record(now, 100)
-		buckets.ResizeWindow(10 * time.Second) // Same size
-
-		// Should maintain data
-		avg := buckets.WindowAverage(now)
-		if avg != 100 {
-			t.Errorf("Data should be preserved when resizing to same size, got %f", avg)
-		}
-	})
-
-	t.Run("ResizeToLarger", func(t *testing.T) {
-		buckets := NewTimeWindow(5*time.Second, 1*time.Second)
-		now := time.Now()
-
-		// Fill current window
-		for i := range 5 {
-			buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
-		}
-
-		buckets.ResizeWindow(10 * time.Second)
-
-		// All data should still be there
-		avg := buckets.WindowAverage(now.Add(4 * time.Second))
-		if avg == 0 {
-			t.Error("Data should be preserved when resizing to larger window")
-		}
-	})
-
-	t.Run("ResizeAfterExpiry", func(t *testing.T) {
-		buckets := NewTimeWindow(5*time.Second, 1*time.Second)
-		now := time.Now()
-
-		buckets.Record(now, 100)
-
-		// Wait for window to expire
-		expiredTime := now.Add(10 * time.Second)
-
-		// Resize after expiry
-		buckets.ResizeWindow(3 * time.Second)
-
-		// Should be empty
-		if !buckets.IsEmpty(expiredTime) {
-			t.Error("Should be empty after resizing expired window")
-		}
-	})
-}
-
-func TestTimeWindow_ConcurrentResizeWindow(t *testing.T) {
-	buckets := NewTimeWindow(10*time.Second, 1*time.Second)
-	now := time.Now()
-
-	done := make(chan bool)
-
-	// Writer goroutine
-	go func() {
-		for i := range 50 {
-			buckets.Record(now.Add(time.Duration(i)*100*time.Millisecond), float64(i))
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Resizer goroutine
-	go func() {
-		for i := range 10 {
-			newWindow := time.Duration(5+i) * time.Second
-			buckets.ResizeWindow(newWindow)
-			time.Sleep(5 * time.Millisecond)
-		}
-		done <- true
-	}()
-
-	// Reader goroutine
-	go func() {
-		for range 50 {
-			buckets.WindowAverage(now)
-			time.Sleep(time.Microsecond)
-		}
-		done <- true
-	}()
-
-	// Wait for all to complete
-	<-done
-	<-done
-	<-done
-}
-
-func TestTimeWindow_FirstWriteUpdate(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Record in reverse order
-	buckets.Record(now.Add(5*time.Second), 50)
-	buckets.Record(now.Add(3*time.Second), 30)
-	buckets.Record(now.Add(1*time.Second), 10)
-
-	// Should handle firstWrite correctly
-	avg := buckets.WindowAverage(now.Add(5 * time.Second))
-	// Should include all three values: (10 + 0 + 30 + 0 + 50) / 5 = 18
-	expected := 18.0
-	if avg != expected {
-		t.Errorf("Expected average %f, got %f", expected, avg)
-	}
-}
-
-func TestMetricSnapshot_EdgeCases(t *testing.T) {
-	t.Run("ZeroValues", func(t *testing.T) {
-		now := time.Now()
-		snapshot := NewMetricSnapshot(0.0, 0.0, 0, now)
-
-		if snapshot.StableValue() != 0.0 {
-			t.Error("Stable value should be 0")
-		}
-		if snapshot.PanicValue() != 0.0 {
-			t.Error("Panic value should be 0")
-		}
-		if snapshot.ReadyPodCount() != 0 {
-			t.Error("Ready pod count should be 0")
-		}
-	})
-
-	t.Run("NegativeValues", func(t *testing.T) {
-		now := time.Now()
-		snapshot := NewMetricSnapshot(-100.5, -200.5, -5, now)
-
-		if snapshot.StableValue() != -100.5 {
-			t.Errorf("Expected stable value -100.5, got %f", snapshot.StableValue())
-		}
-		if snapshot.PanicValue() != -200.5 {
-			t.Errorf("Expected panic value -200.5, got %f", snapshot.PanicValue())
-		}
-		if snapshot.ReadyPodCount() != -5 {
-			t.Errorf("Expected -5 ready pods, got %d", snapshot.ReadyPodCount())
-		}
-	})
-
-	t.Run("Immutability", func(t *testing.T) {
-		now := time.Now()
-		snapshot := NewMetricSnapshot(100.0, 150.0, 5, now)
-
-		// Get values multiple times to ensure they don't change
-		for range 3 {
-			if snapshot.StableValue() != 100.0 {
-				t.Error("Stable value changed")
-			}
-			if snapshot.PanicValue() != 150.0 {
-				t.Error("Panic value changed")
-			}
-			if snapshot.ReadyPodCount() != 5 {
-				t.Error("Ready pod count changed")
-			}
-			if !snapshot.Timestamp().Equal(now) {
-				t.Error("Timestamp changed")
-			}
-		}
-	})
-}
-
-func TestMinInt(t *testing.T) {
+func TestComputeDecayMultiplier(t *testing.T) {
 	tests := []struct {
-		a, b, expected int
-	}{
-		{1, 2, 1},
-		{2, 1, 1},
-		{-1, 1, -1},
-		{-5, -3, -5},
-		{0, 0, 0},
-		{math.MaxInt32, math.MinInt32, math.MinInt32},
-	}
+		numBuckets float64
+		want       float64
+	}{{
+		numBuckets: 100,
+		want:       minExponent,
+	}, {
+		numBuckets: 60,
+		want:       minExponent,
+	}, {
+		numBuckets: 40,
+		want:       0.20567,
+	}, {
+		numBuckets: 6,
+		want:       0.78456,
+	}}
 
-	for _, test := range tests {
-		result := min(test.a, test.b)
-		if result != test.expected {
-			t.Errorf("min(%d, %d) = %d, expected %d", test.a, test.b, result, test.expected)
-		}
-	}
-}
-
-// Additional Benchmarks
-
-
-func BenchmarkTimeWindow_ResizeWindow(b *testing.B) {
-	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
-
-	// Pre-fill with data
-	for i := range 60 {
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i))
-	}
-
-	b.ResetTimer()
-	i := 0
-	for b.Loop() {
-		newWindow := time.Duration((i%10)+5) * time.Second
-		buckets.ResizeWindow(newWindow)
-		i++
-	}
-}
-
-func BenchmarkTimeWindow_ConcurrentAccess(b *testing.B) {
-	buckets := NewTimeWindow(60*time.Second, 1*time.Second)
-	now := time.Now()
-
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			if i%2 == 0 {
-				buckets.Record(now.Add(time.Duration(i)*time.Millisecond), float64(i))
-			} else {
-				_ = buckets.WindowAverage(now)
+	for _, tc := range tests {
+		t.Run(fmt.Sprint("nb=", tc.numBuckets), func(t *testing.T) {
+			if got, want := computeSmoothingCoeff(tc.numBuckets), tc.want; math.Abs(got-want) > weightPrecision {
+				t.Errorf("Decay multiplier = %v, want: %v", got, want)
 			}
-			i++
+		})
+	}
+}
+
+func TestTimeWindowSimple(t *testing.T) {
+	trunc1 := time.Now().Truncate(1 * time.Second)
+	trunc5 := time.Now().Truncate(5 * time.Second)
+
+	type args struct {
+		time  time.Time
+		value float64
+	}
+	tests := []struct {
+		name        string
+		granularity time.Duration
+		stats       []args
+		want        map[time.Time]float64
+	}{{
+		name:        "granularity = 1s",
+		granularity: time.Second,
+		stats: []args{
+			{trunc1, 1.0}, // activator scale from 0.
+			{trunc1.Add(100 * time.Millisecond), 10.0}, // from scraping pod/sent by activator.
+			{trunc1.Add(1 * time.Second), 1.0},         // next bucket
+			{trunc1.Add(3 * time.Second), 1.0},         // nextnextnext bucket
+		},
+		want: map[time.Time]float64{
+			trunc1:                      11.0,
+			trunc1.Add(1 * time.Second): 1.0,
+			trunc1.Add(3 * time.Second): 1.0,
+		},
+	}, {
+		name:        "granularity = 5s",
+		granularity: 5 * time.Second,
+		stats: []args{
+			{trunc5, 1.0},
+			{trunc5.Add(3 * time.Second), 11.0}, // same bucket
+			{trunc5.Add(6 * time.Second), 1.0},  // next bucket
+		},
+		want: map[time.Time]float64{
+			trunc5:                      12.0,
+			trunc5.Add(5 * time.Second): 1.0,
+		},
+	}, {
+		name:        "empty",
+		granularity: time.Second,
+		stats:       []args{},
+		want:        map[time.Time]float64{},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// New implementation test.
+			buckets := NewTimeWindow(2*time.Minute, tt.granularity)
+			if !buckets.IsEmpty(trunc1) {
+				t.Error("Unexpected non empty result")
+			}
+			for _, stat := range tt.stats {
+				buckets.Record(stat.time, stat.value)
+			}
+
+			got := make(map[time.Time]float64)
+			// Less time in future than our window is (2mins above), but more than any of the tests report.
+			buckets.forEachBucket(trunc1.Add(time.Minute), func(t time.Time, b float64) {
+				// Since we're storing 0s when there's no data, we need to exclude those
+				// for this test.
+				if b > 0 {
+					got[t] = b
+				}
+			})
+
+			if !reflect.DeepEqual(tt.want, got) {
+				t.Error("Unexpected values (-want +got):", reflect.DeepEqual(tt.want, got))
+			}
+		})
+	}
+}
+
+func TestTimeWindowManyReps(t *testing.T) {
+	trunc1 := time.Now().Truncate(granularity)
+	buckets := NewTimeWindow(time.Minute, granularity)
+	for p := range 5 {
+		trunc1 = trunc1.Add(granularity)
+		for t := range 5 {
+			buckets.Record(trunc1, float64(p+t))
 		}
+	}
+	// So the buckets are:
+	// t0: [0, 1, 2, 3, 4] = 10
+	// t1: [1, 2, 3, 4, 5] = 15
+	// t2: [2, 3, 4, 5, 6] = 20
+	// t3: [3, 4, 5, 6, 7] = 25
+	// t4: [4, 5, 6, 7, 8] = 30
+	//                     = 100
+	const want = 100.
+	sum1, sum2 := 0., 0.
+	buckets.forEachBucket(trunc1, func(_ time.Time, b float64) {
+		sum1 += b
 	})
+	buckets.forEachBucket(trunc1, func(_ time.Time, b float64) {
+		sum2 += b
+	})
+	if got, want := sum1, want; got != want {
+		t.Errorf("Sum1 = %f, want: %f", got, want)
+	}
+
+	if got, want := sum2, want; got != want {
+		t.Errorf("Sum2 = %f, want: %f", got, want)
+	}
 }
 
-func BenchmarkMetricSnapshot_Creation(b *testing.B) {
+func TestTimeWindowManyRepsWithNonMonotonicalOrder(t *testing.T) {
+	start := time.Now().Truncate(granularity)
+	end := start
+	buckets := NewTimeWindow(time.Minute, granularity)
+
+	d := []int{0, 3, 2, 1, 4}
+	for p := range 5 {
+		end = start.Add(time.Duration(d[p]) * granularity)
+		for t := range 5 {
+			buckets.Record(end, float64(p+t))
+		}
+	}
+
+	// So the buckets are:
+	// t0: [0, 1, 2, 3, 4] = 10
+	// t1: [3, 4, 5, 6, 7] = 25
+	// t2: [2, 3, 4, 5, 6] = 20
+	// t3: [1, 2, 3, 4, 5] = 15
+	// t4: [4, 5, 6, 7, 8] = 30
+	//                     = 100
+	const want = 100.
+	sum1, sum2 := 0., 0.
+	buckets.forEachBucket(end, func(_ time.Time, b float64) {
+		sum1 += b
+	})
+	buckets.forEachBucket(end, func(_ time.Time, b float64) {
+		sum2 += b
+	})
+	if got, want := sum1, want; got != want {
+		t.Errorf("Sum1 = %f, want: %f", got, want)
+	}
+
+	if got, want := sum2, want; got != want {
+		t.Errorf("Sum2 = %f, want: %f", got, want)
+	}
+}
+
+func TestTimeWindowWeightedAverage(t *testing.T) {
 	now := time.Now()
+	buckets := NewWeightedTimeWindow(5*time.Second, granularity)
 
-	b.ResetTimer()
-	i := 0
-	for b.Loop() {
-		_ = NewMetricSnapshot(float64(i), float64(i*2), int32(i), now)
-		i++
+	buckets.Record(now, 2)
+	expectedAvg := 2 * buckets.smoothingCoeff // 2*dm = dm.
+	if got, want := buckets.WindowAverage(now), expectedAvg; got != want {
+		t.Errorf("WeightedAverage = %v, want: %v", got, want)
+	}
+
+	// Let's read one second in future, but no writes.
+	expectedAvg *= (1 - buckets.smoothingCoeff)
+	if got, want := buckets.WindowAverage(now.Add(time.Second)), expectedAvg; got != want {
+		t.Errorf("WeightedAverage = %v, want: %v", got, want)
+	}
+	// Record some more data.
+	buckets.Record(now.Add(time.Second), 2)
+	expectedAvg += 2 * buckets.smoothingCoeff
+	if got, want := buckets.WindowAverage(now.Add(time.Second)), expectedAvg; got != want {
+		t.Errorf("WeightedAverage = %v, want: %v", got, want)
+	}
+
+	// Fill the whole window, with [2, 3, 4, 5, 6]
+	for i := range 5 {
+		buckets.Record(now.Add(time.Duration(2+i)*time.Second), float64(i+2))
+	}
+	// Manually compute wanted average.
+	m := buckets.smoothingCoeff
+	expectedAvg = 6*m +
+		5*m*(1-m) +
+		4*m*(1-m)*(1-m) +
+		3*m*(1-m)*(1-m)*(1-m) +
+		2*m*(1-m)*(1-m)*(1-m)*(1-m)
+	if got, want := buckets.WindowAverage(now.Add(6*time.Second)), expectedAvg; got != want {
+		t.Errorf("WeightedAverage = %v, want: %v", got, want)
+	}
+
+	// Read from an empty window.
+	if got, want := buckets.WindowAverage(now.Add(16*time.Second)), 0.; got != want {
+		t.Errorf("WeightedAverage = %v, want: %v", got, want)
 	}
 }
 
-// Additional edge case tests for 100% coverage
+func TestTimeWindowWindowAverage(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(5*time.Second, granularity)
 
-func TestTimeWindow_WindowAverageRecentPast(t *testing.T) {
-	window := 10 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
-
-	now := time.Now().Truncate(time.Second)
-
-	// Record some values
-	for i := range 10 {
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i))
+	// This verifies that we properly use firstWrite. Without that we'd get 0.2.
+	buckets.Record(now, 1)
+	if got, want := buckets.WindowAverage(now), 1.; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+	for i := 1; i < 5; i++ {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
 	}
 
-	// Query from the recent past (within window)
-	pastTime := now.Add(7 * time.Second)
-	avg := buckets.WindowAverage(pastTime)
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 15./5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+	// Check when `now` lags behind.
+	if got, want := buckets.WindowAverage(now.Add(3600*time.Millisecond)), 15./5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
 
-	// The query time is in the past relative to lastWrite (which is at now+9s)
-	// This triggers the "recent past" case in WindowAverage
-	// Since we're querying at now+7s, and data extends to now+9s,
-	// we should have data from earlier buckets
-	if avg == 0 {
-		t.Error("Average should not be 0 for recent past query")
+	// Check with short hole.
+	if got, want := buckets.WindowAverage(now.Add(6*time.Second)), (15.-1-2)/(5-2); got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Check with a long hole.
+	if got, want := buckets.WindowAverage(now.Add(10*time.Second)), 0.; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Check write with holes.
+	buckets.Record(now.Add(6*time.Second), 91)
+	if got, want := buckets.WindowAverage(now.Add(6*time.Second)), (15.-1-2+91)/5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Advance much farther.
+	now = now.Add(time.Minute)
+	buckets.Record(now, 1984)
+	if got, want := buckets.WindowAverage(now), 1984.; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Check with an earlier time.
+	buckets.Record(now.Add(-3*time.Second), 4)
+	if got, want := buckets.WindowAverage(now), (4.+1984)/4; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// One more second pass.
+	now = now.Add(time.Second)
+	buckets.Record(now, 5)
+	if got, want := buckets.WindowAverage(now), (4.+1984+5)/5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Insert an earlier time again.
+	buckets.Record(now.Add(-3*time.Second), 10)
+	if got, want := buckets.WindowAverage(now), (4.+10+1984+5)/5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Verify that we ignore the value which is too early.
+	buckets.Record(now.Add(-6*time.Second), 10)
+	if got, want := buckets.WindowAverage(now), (4.+10+1984+5)/5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Verify that we ignore the value with bound timestamp.
+	buckets.Record(now.Add(-5*time.Second), 10)
+	if got, want := buckets.WindowAverage(now), (4.+10+1984+5)/5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+
+	// Verify we clear up the data when not receiving data for exact `window` peroid.
+	buckets.Record(now.Add(5*time.Second), 10)
+	if got, want := buckets.WindowAverage(now.Add(5*time.Second)), 10.; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
 	}
 }
 
-func TestTimeWindow_MinimumGranularity(t *testing.T) {
-	// Test with minimum supported granularity (1 second)
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+func TestDescendingRecord(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(5*time.Second, 1*time.Second)
 
-	now := time.Now().Truncate(time.Second)
+	for i := 8 * time.Second; i >= 0*time.Second; i -= time.Second {
+		buckets.Record(now.Add(i), 5)
+	}
 
-	// Record values at second boundaries
+	if got, want := buckets.WindowAverage(now.Add(5*time.Second)), 5.; got != want {
+		// we wrote a 5 every second, and we never wrote in the same second twice,
+		// so the average _should_ be 5.
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+}
+
+func TestTimeWindowHoles(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(5*time.Second, granularity)
+
 	for i := range 5 {
 		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
 	}
 
-	avg := buckets.WindowAverage(now.Add(4 * time.Second))
-	// Should include all 5 values: (1+2+3+4+5)/5 = 3
-	expected := 3.0
-	if avg != expected {
-		t.Errorf("Expected average %f with minimum granularity, got %f", expected, avg)
+	sum := 0.
+
+	buckets.forEachBucket(now.Add(4*time.Second),
+		func(_ time.Time, b float64) {
+			sum += b
+		})
+
+	if got, want := sum, 15.; got != want {
+		t.Errorf("Sum = %v, want: %v", got, want)
+	}
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 15./5; got != want {
+		t.Errorf("WindowAverage = %v, want: %v", got, want)
+	}
+	// Now write at 9th second. Which means that seconds
+	// 5[0], 6[1], 7[2] become 0.
+	buckets.Record(now.Add(8*time.Second), 2.)
+	// So now we have [3] = 2, [4] = 5 and sum should be 7.
+	sum = 0.
+
+	buckets.forEachBucket(now.Add(8*time.Second),
+		func(_ time.Time, b float64) {
+			sum += b
+		})
+	if got, want := sum, 7.; got != want {
+		t.Errorf("Sum = %v, want: %v", got, want)
 	}
 }
 
-func TestTimeWindow_SmallWindow(t *testing.T) {
-	// Test with a small window (minimum granularity is 1 second)
-	window := 3 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+func TestWeightedTimeWindowResizeWindow(t *testing.T) {
+	startTime := time.Now()
+	buckets := NewWeightedTimeWindow(5*time.Second, granularity)
 
-	now := time.Now().Truncate(time.Second)
+	if got, want := buckets.smoothingCoeff, computeSmoothingCoeff(5); math.Abs(got-want) > weightPrecision {
+		t.Errorf("DecayMultipler = %v, want: %v", got, want)
+	}
 
-	// Record values
-	buckets.Record(now, 1)
-	buckets.Record(now.Add(1*time.Second), 2)
-	buckets.Record(now.Add(2*time.Second), 3)
+	// Fill the whole bucketing list with rollover.
+	buckets.Record(startTime, 1)
+	buckets.Record(startTime.Add(1*time.Second), 2)
+	buckets.Record(startTime.Add(2*time.Second), 3)
+	buckets.Record(startTime.Add(3*time.Second), 4)
+	buckets.Record(startTime.Add(4*time.Second), 5)
+	buckets.Record(startTime.Add(5*time.Second), 6)
+	now := startTime.Add(5 * time.Second)
 
-	avg := buckets.WindowAverage(now.Add(2 * time.Second))
-	expected := 2.0 // (1+2+3)/3
-	if avg != expected {
-		t.Errorf("Expected average %f with small window, got %f", expected, avg)
+	sum := 0.
+	buckets.forEachBucket(now, func(t time.Time, b float64) {
+		sum += b
+	})
+	const wantInitial = 2. + 3 + 4 + 5 + 6
+	if got, want := sum, wantInitial; got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+	if got, want := roundToNDigits(3, buckets.WindowAverage(now)), 5.811; /*computed a mano*/ got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+
+	// Increase window. Most of the heavy lifting is delegated to regular buckets
+	// so just do a cursory check.
+	buckets.ResizeWindow(10 * time.Second)
+	if got, want := len(buckets.buckets), 10; got != want {
+		t.Fatalf("Resized bucket count = %d, want: %d", got, want)
+	}
+	if got, want := buckets.window, 10*time.Second; got != want {
+		t.Fatalf("Resized bucket windows = %v, want: %v", got, want)
+	}
+
+	// And this is the main logic that was added in this type.
+	if got, want := buckets.smoothingCoeff, computeSmoothingCoeff(10); math.Abs(got-want) > weightPrecision {
+		t.Errorf("DecayMultipler = %v, want: %v", got, want)
 	}
 }
 
-func TestTimeWindow_WindowAverageBeyondWindow(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+func TestTimeWindowResizeWindow(t *testing.T) {
+	startTime := time.Now()
+	buckets := NewTimeWindow(5*time.Second, granularity)
 
-	now := time.Now()
+	// Fill the whole bucketing list with rollover.
+	buckets.Record(startTime, 1)
+	buckets.Record(startTime.Add(1*time.Second), 2)
+	buckets.Record(startTime.Add(2*time.Second), 3)
+	buckets.Record(startTime.Add(3*time.Second), 4)
+	buckets.Record(startTime.Add(4*time.Second), 5)
+	buckets.Record(startTime.Add(5*time.Second), 6)
+	now := startTime.Add(5 * time.Second)
 
-	// Record a value
-	buckets.Record(now, 100)
+	sum := 0.
+	buckets.forEachBucket(now, func(t time.Time, b float64) {
+		sum += b
+	})
+	const wantInitial = 2. + 3 + 4 + 5 + 6
+	if got, want := sum, wantInitial; got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+	if got, want := buckets.WindowAverage(now), wantInitial/5; got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
 
-	// Query way beyond the window
-	futureTime := now.Add(10 * time.Second)
-	avg := buckets.WindowAverage(futureTime)
+	// Increase window.
+	buckets.ResizeWindow(10 * time.Second)
+	if got, want := len(buckets.buckets), 10; got != want {
+		t.Fatalf("Resized bucket count = %d, want: %d", got, want)
+	}
+	if got, want := buckets.window, 10*time.Second; got != want {
+		t.Fatalf("Resized bucket windows = %v, want: %v", got, want)
+	}
 
-	// Should return 0 as data is outside window
-	if avg != 0 {
-		t.Errorf("Expected 0 for query beyond window, got %f", avg)
+	// Verify values were properly copied.
+	sum = 0.
+	buckets.forEachBucket(now, func(t time.Time, b float64) {
+		sum += b
+	})
+	if got, want := sum, wantInitial; got != want {
+		t.Fatalf("After first resize data set Sum = %v, want: %v", got, want)
+	}
+	// Note the average doesn't change, since we know we had at most 5 buckets.
+	if got, want := buckets.WindowAverage(now), wantInitial/5; got != want {
+		t.Errorf("Initial data set Sum = %v, want: %v", got, want)
+	}
+
+	// Add one more. Make sure all the data is preserved, since window is longer.
+	now = now.Add(time.Second)
+	buckets.Record(now, 7)
+	const wantWithUpdate = wantInitial + 7
+	sum = 0.
+	buckets.forEachBucket(now, func(t time.Time, b float64) {
+		sum += b
+	})
+	if got, want := sum, wantWithUpdate; got != want {
+		t.Fatalf("Updated data set Sum = %v, want: %v", got, want)
+	}
+	// Same here. We just have at most 6 recorded buckets.
+	if got, want := buckets.WindowAverage(now), roundToNDigits(6, wantWithUpdate/6); got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+
+	// Now let's reduce window size.
+	buckets.ResizeWindow(4 * time.Second)
+	if got, want := len(buckets.buckets), 4; got != want {
+		t.Fatalf("Resized bucket count = %d, want: %d", got, want)
+	}
+	// Just last 4 buckets should have remained (so 2 oldest are expunged).
+	const wantWithShrink = wantWithUpdate - 2 - 3
+	sum = 0.
+	buckets.forEachBucket(now, func(t time.Time, b float64) {
+		sum += b
+	})
+	if got, want := sum, wantWithShrink; got != want {
+		t.Fatalf("Updated data set Sum = %v, want: %v", got, want)
+	}
+	if got, want := buckets.WindowAverage(now), wantWithShrink/4; got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+
+	// Verify idempotence.
+	ob := &buckets.buckets
+	buckets.ResizeWindow(4 * time.Second)
+	if ob != &buckets.buckets {
+		t.Error("The buckets have changed, though window didn't")
 	}
 }
 
-func TestTimeWindow_StressTestLargeBuckets(t *testing.T) {
-	// Test with a large number of buckets
-	window := 1 * time.Hour
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+func TestTimeWindowWindowUpdate3sGranularity(t *testing.T) {
+	const granularity = 3 * time.Second
+	trunc1 := time.Now().Truncate(granularity)
 
-	now := time.Now()
-
-	// Record values across the entire window
-	for i := 0; i < 3600; i += 60 { // Every minute
-		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i))
+	// So two buckets here (ceil(5/3)=ceil(1.6(6))=2).
+	buckets := NewTimeWindow(5*time.Second, granularity)
+	if got, want := len(buckets.buckets), 2; got != want {
+		t.Fatalf("Initial bucket count = %d, want: %d", got, want)
 	}
 
-	// Should not panic and should return valid average
-	avg := buckets.WindowAverage(now.Add(59 * time.Minute))
-	if avg == 0 {
-		t.Error("Average should not be 0 for large bucket test")
+	// Fill the whole bucketing list.
+	buckets.Record(trunc1, 10)
+	buckets.Record(trunc1.Add(1*time.Second), 2)
+	buckets.Record(trunc1.Add(2*time.Second), 3)
+	buckets.Record(trunc1.Add(3*time.Second), 4)
+	buckets.Record(trunc1.Add(4*time.Second), 5)
+	buckets.Record(trunc1.Add(5*time.Second), 6)
+	buckets.Record(trunc1.Add(6*time.Second), 7) // This overrides the initial 15 (10+2+3)
+	sum := 0.
+	buckets.forEachBucket(trunc1.Add(6*time.Second), func(t time.Time, b float64) {
+		sum += b
+	})
+	expectedSum := (4. + 5 + 6) + 7
+	if got, want := sum, expectedSum; got != want {
+		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
+	}
+
+	// Increase window.
+	buckets.ResizeWindow(10 * time.Second)
+	if got, want := len(buckets.buckets), 4; got != want {
+		t.Fatalf("Resized bucket count = %d, want: %d", got, want)
+	}
+	if got, want := buckets.window, 10*time.Second; got != want {
+		t.Fatalf("Resized bucket windows = %v, want: %v", got, want)
+	}
+
+	// Verify values were properly copied.
+	sum = 0
+	buckets.forEachBucket(trunc1.Add(6*time.Second), func(t time.Time, b float64) {
+		sum += b
+	})
+	if got, want := sum, expectedSum; got != want {
+		t.Fatalf("After first resize data set Sum = %v, want: %v", got, want)
+	}
+
+	// Add one more. Make sure all the data is preserved, since window is longer.
+	buckets.Record(trunc1.Add(9*time.Second+300*time.Millisecond), 42)
+	sum = 0
+	buckets.forEachBucket(trunc1.Add(9*time.Second), func(t time.Time, b float64) {
+		sum += b
+	})
+	expectedSum += 42
+	if got, want := sum, expectedSum; got != want {
+		t.Fatalf("Updated data set Sum = %v, want: %v", got, want)
+	}
+
+	// Now let's reduce window size.
+	buckets.ResizeWindow(4 * time.Second)
+
+	sum = 0
+	if got, want := len(buckets.buckets), 2; got != want {
+		t.Fatalf("Resized bucket count = %d, want: %d", got, want)
+	}
+
+	// Just last 4 buckets should have remained.
+	sum = 0.
+	expectedSum = 42 + 7 // we drop oldest bucket and the one not yet utilized)
+	buckets.forEachBucket(trunc1.Add(9*time.Second), func(t time.Time, b float64) {
+		sum += b
+	})
+	if got, want := sum, expectedSum; got != want {
+		t.Fatalf("Updated data set Sum = %v, want: %v", got, want)
+	}
+
+	// Verify idempotence.
+	ob := &buckets.buckets
+	buckets.ResizeWindow(4 * time.Second)
+	if ob != &buckets.buckets {
+		t.Error("The buckets have changed, though window didn't")
 	}
 }
 
-func TestTimeWindow_RecordSameBucketAccumulation(t *testing.T) {
-	window := 5 * time.Second
-	granularity := 1 * time.Second
-	buckets := NewTimeWindow(window, granularity)
+func TestTimeWindowWindowUpdateNoOp(t *testing.T) {
+	startTime := time.Now().Add(-time.Minute)
+	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets.Record(startTime, 19.82)
+	if got, want := buckets.firstWrite, buckets.lastWrite; !got.Equal(want) {
+		t.Errorf("FirstWrite = %v, want: %v", got, want)
+	}
+	buckets.ResizeWindow(10 * time.Second)
 
-	now := time.Now().Truncate(time.Second)
-
-	// Record multiple values in the same bucket (same second)
-	buckets.Record(now, 10)
-	buckets.Record(now.Add(100*time.Millisecond), 20)
-	buckets.Record(now.Add(200*time.Millisecond), 30)
-	buckets.Record(now.Add(999*time.Millisecond), 40)
-
-	// All values should accumulate in the same bucket
-	avg := buckets.WindowAverage(now)
-	expected := 100.0 // 10+20+30+40 = 100 in one bucket
-	if avg != expected {
-		t.Errorf("Expected accumulated value %f, got %f", expected, avg)
+	if got, want := buckets.firstWrite, (time.Time{}); !got.Equal(want) {
+		t.Errorf("FirstWrite after update = %v, want: %v", got, want)
 	}
 }
 
-func TestResizeWindow_RaceCondition(t *testing.T) {
-	// Test for potential race conditions during resize
-	buckets := NewTimeWindow(10*time.Second, 1*time.Second)
-
-	done := make(chan bool)
-	errors := make(chan error, 100)
-
-	// Multiple goroutines resizing concurrently
-	for i := range 10 {
-		go func(id int) {
-			defer func() {
-				if r := recover(); r != nil {
-					errors <- r.(error)
-				}
-				done <- true
-			}()
-
-			for j := range 10 {
-				newSize := time.Duration(5+(id+j)%10) * time.Second
-				buckets.ResizeWindow(newSize)
-				time.Sleep(time.Millisecond)
+func BenchmarkWindowAverage(b *testing.B) {
+	// Window lengths in secs.
+	for _, wl := range []int{30, 60, 120, 240, 600} {
+		b.Run(fmt.Sprintf("%v-win-len", wl), func(b *testing.B) {
+			tn := time.Now().Truncate(time.Second) // To simplify everything.
+			buckets := NewTimeWindow(time.Duration(wl)*time.Second,
+				time.Second /*granularity*/)
+			// Populate with some random data.
+			for i := range wl {
+				buckets.Record(tn.Add(time.Duration(i)*time.Second), rand.Float64()*100)
 			}
-		}(i)
+			for range b.N {
+				buckets.WindowAverage(tn.Add(time.Duration(wl) * time.Second))
+			}
+		})
 	}
+}
 
-	// Wait for all goroutines
-	for range 10 {
-		<-done
+func TestRoundToNDigits(t *testing.T) {
+	if got, want := roundToNDigits(6, 3.6e-17), 0.; got != want {
+		t.Errorf("Rounding = %v, want: %v", got, want)
 	}
+	if got, want := roundToNDigits(3, 0.0004), 0.; got != want {
+		t.Errorf("Rounding = %v, want: %v", got, want)
+	}
+	if got, want := roundToNDigits(3, 1.2345), 1.234; got != want {
+		t.Errorf("Rounding = %v, want: %v", got, want)
+	}
+	if got, want := roundToNDigits(4, 1.2345), 1.2345; got != want {
+		t.Errorf("Rounding = %v, want: %v", got, want)
+	}
+	if got, want := roundToNDigits(6, 12345), 12345.; got != want {
+		t.Errorf("Rounding = %v, want: %v", got, want)
+	}
+}
 
-	close(errors)
+func (t *TimeWindow) forEachBucket(now time.Time, acc func(time time.Time, bucket float64)) {
+	now = now.Truncate(t.granularity)
+	t.bucketsMutex.RLock()
+	defer t.bucketsMutex.RUnlock()
 
-	// Check for any errors
-	for err := range errors {
-		t.Errorf("Race condition detected: %v", err)
+	// So number of buckets we can process is len(buckets)-(now-lastWrite)/granularity.
+	// Since empty check above failed, we know this is at least 1 bucket.
+	numBuckets := len(t.buckets) - int(now.Sub(t.lastWrite)/t.granularity)
+	bucketTime := t.lastWrite // Always aligned with granularity.
+	si := t.timeToIndex(bucketTime)
+	for range numBuckets {
+		tIdx := si % len(t.buckets)
+		acc(bucketTime, t.buckets[tIdx])
+		si--
+		bucketTime = bucketTime.Add(-t.granularity)
 	}
 }
