@@ -88,34 +88,37 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.spec.MaxScaleDownRate))
 	}
 
-	// Calculate desired pod counts
-	var desiredStablePodCount, desiredPanicPodCount int32
+	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
+	var rawStablePodCount, rawPanicPodCount int32
+
 	if a.spec.TargetValue == 0 {
 		// When target value is zero, any positive metric value would require infinite pods
 		// So we set to a very large value that will be clamped by rate limits and max scale
-		desiredStablePodCount = math.MaxInt32
-		desiredPanicPodCount = math.MaxInt32
+		rawStablePodCount = math.MaxInt32
+		rawPanicPodCount = math.MaxInt32
 	} else {
-		desiredStablePodCount = int32(math.Ceil(observedStableValue / a.spec.TargetValue))
-		desiredPanicPodCount = int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
+		rawStablePodCount = int32(math.Ceil(observedStableValue / a.spec.TargetValue))
+		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
 	}
 
 	// Apply scale limits
-	desiredStablePodCount = min(max(desiredStablePodCount, maxScaleDown), maxScaleUp)
-	desiredPanicPodCount = min(max(desiredPanicPodCount, maxScaleDown), maxScaleUp)
+	desiredStablePodCount := min(max(rawStablePodCount, maxScaleDown), maxScaleUp)
+	desiredPanicPodCount := min(max(rawPanicPodCount, maxScaleDown), maxScaleUp)
 
 	// Apply activation scale if needed
 	if a.spec.ActivationScale > 1 {
-		if desiredStablePodCount > 0 && a.spec.ActivationScale > desiredStablePodCount {
+		// Activation scale should apply only when there is actual demand (i.e. raw counts > 0).
+		// This prevents the activation scale from blocking scale-to-zero.
+		if rawStablePodCount > 0 && a.spec.ActivationScale > desiredStablePodCount {
 			desiredStablePodCount = a.spec.ActivationScale
 		}
-		if desiredPanicPodCount > 0 && a.spec.ActivationScale > desiredPanicPodCount {
+		if rawPanicPodCount > 0 && a.spec.ActivationScale > desiredPanicPodCount {
 			desiredPanicPodCount = a.spec.ActivationScale
 		}
 	}
 
 	// Check panic mode conditions
-	isOverPanicThreshold := float64(desiredPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
+	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state
