@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
-	"github.com/Fedosin/libkpa/delaywindow"
+	"github.com/Fedosin/libkpa/maxtimewindow"
 )
 
 // SlidingWindowAutoscaler implements the sliding window autoscaling algorithm
@@ -39,23 +39,23 @@ type SlidingWindowAutoscaler struct {
 	maxPanicPods int32
 
 	// Delay window for scale-down decisions
-	delayWindow *delaywindow.DelayWindow
+	maxTimeWindow *maxtimewindow.TimeWindow
 }
 
 const (
-	scaleDownDelayGranularity = 1 * time.Second
+	scaleDownDelayGranularity = 2 * time.Second
 )
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
 func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec) *SlidingWindowAutoscaler {
-	var delayWindow *delaywindow.DelayWindow
+	var maxTimeWindow *maxtimewindow.TimeWindow
 	if spec.ScaleDownDelay > 0 {
-		delayWindow = delaywindow.NewDelayWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
+		maxTimeWindow = maxtimewindow.NewTimeWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
 	return &SlidingWindowAutoscaler{
 		spec:        spec,
-		delayWindow: delayWindow,
+		maxTimeWindow: maxTimeWindow,
 	}
 }
 
@@ -153,9 +153,9 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Apply scale-down delay if configured
-	if a.spec.Reachable && a.delayWindow != nil {
-		a.delayWindow.Record(now, desiredPodCount)
-		desiredPodCount = a.delayWindow.CurrentMax()
+	if a.spec.Reachable && a.maxTimeWindow != nil {
+		a.maxTimeWindow.Record(now, desiredPodCount)
+		desiredPodCount = a.maxTimeWindow.Current()
 	}
 
 	// Apply min/max scale bounds
@@ -194,13 +194,7 @@ func (a *SlidingWindowAutoscaler) Update(spec api.AutoscalerSpec) error {
 
 	// Update delay window if needed
 	if spec.ScaleDownDelay > 0 {
-		if a.delayWindow == nil {
-			a.delayWindow = delaywindow.NewDelayWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
-		} else {
-			a.delayWindow.Resize(spec.ScaleDownDelay)
-		}
-	} else {
-		a.delayWindow = nil
+		a.maxTimeWindow = maxtimewindow.NewTimeWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
 	return nil
