@@ -47,16 +47,29 @@ const (
 )
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
-func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec) *SlidingWindowAutoscaler {
+func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec, initialScale int32) *SlidingWindowAutoscaler {
 	var maxTimeWindow *maxtimewindow.TimeWindow
 	if spec.ScaleDownDelay > 0 {
 		maxTimeWindow = maxtimewindow.NewTimeWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
-	return &SlidingWindowAutoscaler{
-		spec:        spec,
+	result := &SlidingWindowAutoscaler{
+		spec:          spec,
 		maxTimeWindow: maxTimeWindow,
 	}
+
+	// We always start in the panic mode, if the deployment is scaled up over 1 pod.
+	// If the scale is 0 or 1, normal Autoscaler behavior is fine.
+	// When Autoscaler restarts we lose metric history, which causes us to
+	// momentarily scale down, and that is not a desired behavior.
+	// Thus, we're keeping at least the current scale until we
+	// accumulate enough data to make conscious decisions.
+	if initialScale > 1 {
+		result.maxPanicPods = initialScale
+		result.panicTime = time.Now()
+	}
+
+	return result
 }
 
 // Scale calculates the desired scale based on current metrics.
