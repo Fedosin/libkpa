@@ -43,7 +43,7 @@ func TestSlidingWindowAutoscaler_StableTraffic(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test stable traffic - should maintain current scale
@@ -85,7 +85,7 @@ func TestSlidingWindowAutoscaler_RampingTraffic(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test ramping up traffic
@@ -125,7 +125,7 @@ func TestSlidingWindowAutoscaler_PanicMode(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test panic mode triggering - panic metric shows we need double the pods
@@ -184,7 +184,7 @@ func TestSlidingWindowAutoscaler_ScaleDownDelay(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Start with high load
@@ -232,7 +232,7 @@ func TestSlidingWindowAutoscaler_MinMaxScale(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test min scale
@@ -278,7 +278,7 @@ func TestSlidingWindowAutoscaler_ActivationScale(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test activation scale
@@ -314,7 +314,7 @@ func TestSlidingWindowAutoscaler_ZeroValues(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test with zero values
@@ -455,7 +455,7 @@ func TestSlidingWindowAutoscaler_Update(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 
 	// Update configuration
 	newSpec := spec
@@ -495,7 +495,7 @@ func TestSlidingWindowAutoscaler_RateLimiting(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test scale up rate limiting
@@ -544,7 +544,7 @@ func TestSlidingWindowAutoscaler_UnreachableState(t *testing.T) {
 		Reachable:             false, // Service is unreachable
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test scaling to zero when unreachable with MinScale=0
@@ -600,7 +600,7 @@ func TestSlidingWindowAutoscaler_RPSMetric(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test with RPS metric
@@ -636,7 +636,7 @@ func TestSlidingWindowAutoscaler_ScaleToZero(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Test scaling to zero
@@ -675,7 +675,7 @@ func TestSlidingWindowAutoscaler_RapidMetricChanges(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Simulate rapid metric changes
@@ -784,7 +784,7 @@ func TestSlidingWindowAutoscaler_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			autoscaler := NewSlidingWindowAutoscaler(tt.spec)
+			autoscaler := NewSlidingWindowAutoscaler(tt.spec, 3)
 			now := time.Now()
 
 			result := autoscaler.Scale(&tt.snapshot, now)
@@ -817,7 +817,7 @@ func TestSlidingWindowAutoscaler_PanicModeTransitions(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	// Enter panic mode
@@ -875,7 +875,7 @@ func TestSlidingWindowAutoscaler_InvalidMetricSnapshot(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 	now := time.Now()
 
 	snapshot1 := metrics.NewMetricSnapshot(
@@ -930,7 +930,7 @@ func TestSlidingWindowAutoscaler_ConcurrentAccess(t *testing.T) {
 		Reachable:             true,
 	}
 
-	autoscaler := NewSlidingWindowAutoscaler(spec)
+	autoscaler := NewSlidingWindowAutoscaler(spec, 0)
 
 	// Run multiple goroutines to test concurrent access
 	done := make(chan bool)
@@ -1023,10 +1023,65 @@ func TestSlidingWindowAutoscaler_InvalidConfigurations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Should not panic on creation
-			autoscaler := NewSlidingWindowAutoscaler(tt.spec)
+			autoscaler := NewSlidingWindowAutoscaler(tt.spec, 3)
 			if autoscaler == nil {
 				t.Error("Expected autoscaler to be created")
 			}
 		})
+	}
+}
+
+func TestSlidingWindowAutoscaler_InitialPanicMode(t *testing.T) {
+	spec := api.AutoscalerSpec{
+		MaxScaleUpRate:        10.0,
+		MaxScaleDownRate:      2.0,
+		ScalingMetric:         api.Concurrency,
+		TargetValue:           100.0,
+		TotalValue:            1000.0,
+		TargetBurstCapacity:   200.0,
+		PanicThreshold:        2.0,
+		PanicWindowPercentage: 10.0,
+		StableWindow:          60 * time.Second,
+		ScaleDownDelay:        0,
+		MinScale:              1,
+		MaxScale:              10,
+		ActivationScale:       1,
+		Reachable:             true,
+	}
+
+	// Test with initial scale > 1
+	autoscaler := NewSlidingWindowAutoscaler(spec, 3)
+	now := time.Now()
+
+	// First scale call should be in panic mode
+	snapshot := metrics.NewMetricSnapshot(
+		100.0, // Low traffic
+		100.0, // Low traffic
+		3,     // Current pods
+		now,
+	)
+	result := autoscaler.Scale(snapshot, now)
+
+	if !result.InPanicMode {
+		t.Error("Expected to be in panic mode with initial scale > 1")
+	}
+	if result.DesiredPodCount != 3 {
+		t.Errorf("Expected to maintain initial scale of 3 pods, got %d", result.DesiredPodCount)
+	}
+
+	// Test with initial scale = 1
+	autoscaler2 := NewSlidingWindowAutoscaler(spec, 1)
+	result2 := autoscaler2.Scale(snapshot, now)
+
+	if result2.InPanicMode {
+		t.Error("Expected not to be in panic mode with initial scale = 1")
+	}
+
+	// Test with initial scale = 0
+	autoscaler3 := NewSlidingWindowAutoscaler(spec, 0)
+	result3 := autoscaler3.Scale(snapshot, now)
+
+	if result3.InPanicMode {
+		t.Error("Expected not to be in panic mode with initial scale = 0")
 	}
 }
