@@ -218,12 +218,14 @@ func (t *TimeWindow) WindowAverage(now time.Time) float64 {
 		stIdx := t.timeToIndex(t.lastWrite)
 		eIdx := t.timeToIndex(now)
 		ret := t.windowTotal
-		for i := stIdx + 1; i <= eIdx; i++ {
-			ret -= t.buckets[i%len(t.buckets)]
+		bucketsToRemove := min(eIdx-stIdx, len(t.buckets))
+		for i := 1; i <= bucketsToRemove; i++ {
+			idx := (stIdx + i) % len(t.buckets)
+			ret -= t.buckets[idx]
 		}
 		numB := math.Min(
 			float64(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1, // +1 since the times are inclusive.
-			float64(len(t.buckets)-(eIdx-stIdx)))
+			float64(len(t.buckets)-bucketsToRemove))
 		return roundToNDigits(precision, ret/numB)
 	default: // Nothing for more than a window time, just 0.
 		return 0.

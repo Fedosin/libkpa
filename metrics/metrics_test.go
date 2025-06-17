@@ -323,6 +323,104 @@ func TestTimeWindowWindowAverage(t *testing.T) {
 	}
 }
 
+// TestTimeWindowAverageWithLargeGap tests the wraparound bug fix where the time gap
+// between lastWrite and now exceeds the bucket array size.
+func TestTimeWindowAverageWithLargeGap(t *testing.T) {
+	now := time.Now()
+	// Create a window with 30 buckets (60s window / 2s granularity)
+	buckets := NewTimeWindow(60*time.Second, 2*time.Second)
+
+	// Record some initial data
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*2*time.Second), float64(i+1))
+	}
+
+	// windowTotal should be 1+2+3+...+10 = 55
+
+	// Now query with a gap larger than the bucket count (65 seconds = 32.5 buckets)
+	// This should handle the wraparound correctly and not subtract buckets multiple times
+	futureTime := now.Add(65 * time.Second)
+	avg := buckets.WindowAverage(futureTime)
+
+	// The average should be based on remaining valid buckets
+	// Since the gap is 45 seconds (65-20), which is 22.5 buckets,
+	// we should have ~7-8 valid buckets remaining
+	// But since gap < window, case 2 applies
+	if avg < 0 {
+		t.Errorf("WindowAverage with large gap returned negative value: %v", avg)
+	}
+
+	// Test with an even larger gap that's still less than window
+	futureTime2 := now.Add(75 * time.Second)
+	avg2 := buckets.WindowAverage(futureTime2)
+
+	// Should still handle correctly without going negative
+	if avg2 < 0 {
+		t.Errorf("WindowAverage with very large gap returned negative value: %v", avg2)
+	}
+}
+
+// TestTimeWindowAverageNegativeValues tests that the window can handle and average negative values correctly.
+func TestTimeWindowAverageNegativeValues(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(5*time.Second, granularity)
+
+	// Record negative values
+	buckets.Record(now, -10)
+	buckets.Record(now.Add(1*time.Second), -20)
+	buckets.Record(now.Add(2*time.Second), -30)
+
+	// Average should be (-10 + -20 + -30) / 3 = -20
+	if got, want := buckets.WindowAverage(now.Add(2*time.Second)), -20.0; got != want {
+		t.Errorf("WindowAverage with negative values = %v, want: %v", got, want)
+	}
+
+	// Mix of positive and negative
+	buckets.Record(now.Add(3*time.Second), 40)
+	buckets.Record(now.Add(4*time.Second), 50)
+
+	// Average should be (-10 + -20 + -30 + 40 + 50) / 5 = 30 / 5 = 6
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 6.0; got != want {
+		t.Errorf("WindowAverage with mixed values = %v, want: %v", got, want)
+	}
+}
+
+// TestTimeWindowAverageBoundaryConditions tests edge cases around bucket boundaries.
+func TestTimeWindowAverageBoundaryConditions(t *testing.T) {
+	now := time.Now()
+	// Small window to make wraparound easier to test
+	buckets := NewTimeWindow(10*time.Second, 2*time.Second) // 5 buckets
+
+	// Fill all buckets
+	for i := range 5 {
+		buckets.Record(now.Add(time.Duration(i)*2*time.Second), float64(i+1))
+	}
+
+	// Test querying at exactly the window boundary
+	avg := buckets.WindowAverage(now.Add(8 * time.Second))
+	if got, want := avg, 15.0/5; got != want {
+		t.Errorf("WindowAverage at boundary = %v, want: %v", got, want)
+	}
+
+	// Test with gap that equals window size
+	futureTime := now.Add(18 * time.Second) // 10 seconds after last write at 8s
+	avg2 := buckets.WindowAverage(futureTime)
+
+	// When gap equals window size, should return 0 (default case)
+	if got, want := avg2, 0.0; got != want {
+		t.Errorf("WindowAverage with gap equal to window size = %v, want: %v", got, want)
+	}
+
+	// Test with gap slightly less than window size
+	futureTime3 := now.Add(17 * time.Second) // 9 seconds after last write
+	avg3 := buckets.WindowAverage(futureTime3)
+
+	// Should not be negative and should handle wraparound correctly
+	if avg3 < 0 {
+		t.Errorf("WindowAverage with gap near window size returned negative: %v", avg3)
+	}
+}
+
 func TestDescendingRecord(t *testing.T) {
 	now := time.Now()
 	buckets := NewTimeWindow(5*time.Second, 1*time.Second)
