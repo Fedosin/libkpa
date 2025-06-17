@@ -92,6 +92,13 @@ func computeSmoothingCoeff(nb float64) float64 {
 // NewTimeWindow generates a new TimeWindow with the given
 // granularity.
 func NewTimeWindow(window, granularity time.Duration) *TimeWindow {
+	if granularity <= 0 {
+		panic(fmt.Sprintf("granularity must be positive, got %v", granularity))
+	}
+	if window < granularity {
+		panic(fmt.Sprintf("window must be >= granularity, got window=%v, granularity=%v", window, granularity))
+	}
+
 	// Number of buckets is `window` divided by `granularity`, rounded up.
 	// e.g. 60s / 2s = 30.
 	nb := math.Ceil(float64(window) / float64(granularity))
