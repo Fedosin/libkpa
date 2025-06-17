@@ -713,7 +713,7 @@ func BenchmarkWindowAverage(b *testing.B) {
 			for i := range wl {
 				buckets.Record(tn.Add(time.Duration(i)*time.Second), rand.Float64()*100)
 			}
-			for range b.N {
+			for b.Loop() {
 				buckets.WindowAverage(tn.Add(time.Duration(wl) * time.Second))
 			}
 		})

@@ -93,7 +93,7 @@ func TestTimedWindowMax(t *testing.T) {
 func BenchmarkLargeTimeWindowCreate(b *testing.B) {
 	for _, duration := range []time.Duration{5 * time.Minute, 15 * time.Minute, 30 * time.Minute, 45 * time.Minute} {
 		b.Run(fmt.Sprintf("duration-%v", duration), func(b *testing.B) {
-			for range b.N {
+			for b.Loop() {
 				_ = NewTimeWindow(duration, 1*time.Second)
 			}
 		})
@@ -104,7 +104,7 @@ func BenchmarkLargeTimeWindowRecord(b *testing.B) {
 	w := NewTimeWindow(45*time.Minute, 1*time.Second)
 	now := time.Now()
 
-	for range b.N {
+	for b.Loop() {
 		now = now.Add(1 * time.Second)
 		w.Record(now, rand.Int31())
 	}
