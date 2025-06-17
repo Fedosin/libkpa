@@ -127,9 +127,10 @@ func (t *TimeWindow) isEmptyLocked(now time.Time) bool {
 	return now.Sub(t.lastWrite) > t.window
 }
 
+// roundToNDigits rounds a float64 to n decimal places.
 func roundToNDigits(n int, f float64) float64 {
 	p := math.Pow10(n)
-	return math.Floor(f*p) / p
+	return math.Round(f*p) / p
 }
 
 const (

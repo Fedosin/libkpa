@@ -497,7 +497,7 @@ func TestWeightedTimeWindowResizeWindow(t *testing.T) {
 	if got, want := sum, wantInitial; got != want {
 		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
 	}
-	if got, want := roundToNDigits(3, buckets.WindowAverage(now)), 5.811; /*computed a mano*/ got != want {
+	if got, want := roundToNDigits(3, buckets.WindowAverage(now)), 5.812; /*computed a mano*/ got != want {
 		t.Fatalf("Initial data set Sum = %v, want: %v", got, want)
 	}
 
@@ -727,7 +727,7 @@ func TestRoundToNDigits(t *testing.T) {
 	if got, want := roundToNDigits(3, 0.0004), 0.; got != want {
 		t.Errorf("Rounding = %v, want: %v", got, want)
 	}
-	if got, want := roundToNDigits(3, 1.2345), 1.234; got != want {
+	if got, want := roundToNDigits(3, 1.2345), 1.235; got != want {
 		t.Errorf("Rounding = %v, want: %v", got, want)
 	}
 	if got, want := roundToNDigits(4, 1.2345), 1.2345; got != want {
