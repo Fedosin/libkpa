@@ -215,10 +215,10 @@ func (t *TimeWindow) WindowAverage(now time.Time) float64 {
 		// If LastWrite equal or greater than Now
 		// return the current WindowTotal, divided by the
 		// number of valid buckets
-		numB := math.Min(
-			float64(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1, // +1 since the times are inclusive.
-			float64(len(t.buckets)))
-		return roundToNDigits(precision, t.windowTotal/numB)
+		numB := min(
+			int(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1, // +1 since the times are inclusive.
+			len(t.buckets))
+		return roundToNDigits(precision, t.windowTotal/float64(numB))
 	case d < t.window:
 		// If we haven't received metrics for some time, which is less than
 		// the window -- remove the outdated items and divide by the number
@@ -226,15 +226,13 @@ func (t *TimeWindow) WindowAverage(now time.Time) float64 {
 		stIdx := t.timeToIndex(t.lastWrite)
 		eIdx := t.timeToIndex(now)
 		ret := t.windowTotal
-		bucketsToRemove := min(eIdx-stIdx, len(t.buckets))
-		for i := 1; i <= bucketsToRemove; i++ {
-			idx := (stIdx + i) % len(t.buckets)
-			ret -= t.buckets[idx]
+		for i := stIdx + 1; i <= eIdx; i++ {
+			ret -= t.buckets[i%len(t.buckets)]
 		}
-		numB := math.Min(
-			float64(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1, // +1 since the times are inclusive.
-			float64(len(t.buckets)-bucketsToRemove))
-		return roundToNDigits(precision, ret/numB)
+		numB := min(
+			int(t.lastWrite.Sub(t.firstWrite)/t.granularity)+1, // +1 since the times are inclusive.
+			len(t.buckets)-(eIdx-stIdx))
+		return roundToNDigits(precision, ret/float64(numB))
 	default: // Nothing for more than a window time, just 0.
 		return 0.
 	}

@@ -755,3 +755,117 @@ func (t *TimeWindow) forEachBucket(now time.Time, acc func(time time.Time, bucke
 		bucketTime = bucketTime.Add(-t.granularity)
 	}
 }
+
+func TestTimeWindowAverageWithZeros(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(10*time.Second, granularity)
+
+	// Fill the window with zeros
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), 0)
+	}
+
+	// The average of all zeros should be 0
+	if got, want := buckets.WindowAverage(now.Add(9*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros = %v, want: %v", got, want)
+	}
+
+	// Test with partial window (first 5 seconds)
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (partial window) = %v, want: %v", got, want)
+	}
+
+	// Test after some time has passed without new data
+	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
+
+func TestTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
+	now := time.Now()
+	buckets := NewTimeWindow(10*time.Second, granularity)
+
+	// Fill the window with random positive values
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), rand.Float64()*100)
+	}
+
+	now = now.Add(10 * time.Second)
+
+	// Fill the window with zeros
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), 0)
+	}
+
+	// The average of all zeros should be 0
+	if got, want := buckets.WindowAverage(now.Add(9*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros = %v, want: %v", got, want)
+	}
+
+	// Test with partial window (first 5 seconds)
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (partial window) = %v, want: %v", got, want)
+	}
+
+	// Test after some time has passed without new data
+	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
+
+func TestWeightedTimeWindowAverageWithZeros(t *testing.T) {
+	now := time.Now()
+	buckets := NewWeightedTimeWindow(10*time.Second, granularity)
+
+	// Fill the window with zeros
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), 0)
+	}
+
+	// The average of all zeros should be 0
+	if got, want := buckets.WindowAverage(now.Add(9*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros = %v, want: %v", got, want)
+	}
+
+	// Test with partial window (first 5 seconds)
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (partial window) = %v, want: %v", got, want)
+	}
+
+	// Test after some time has passed without new data
+	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
+
+func TestWeightedTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
+	now := time.Now()
+	buckets := NewWeightedTimeWindow(10*time.Second, granularity)
+
+	// Fill the window with random positive values
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), rand.Float64()*100)
+	}
+
+	now = now.Add(10 * time.Second)
+
+	// Fill the window with zeros
+	for i := range 10 {
+		buckets.Record(now.Add(time.Duration(i)*time.Second), 0)
+	}
+
+	// The average of all zeros should be 0
+	if got, want := buckets.WindowAverage(now.Add(9*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros = %v, want: %v", got, want)
+	}
+
+	// Test with partial window (first 5 seconds)
+	if got, want := buckets.WindowAverage(now.Add(4*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (partial window) = %v, want: %v", got, want)
+	}
+
+	// Test after some time has passed without new data
+	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
+		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
