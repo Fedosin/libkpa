@@ -24,20 +24,20 @@ import (
 
 // PanicModeCalculator handles panic mode calculations for the autoscaler.
 type PanicModeCalculator struct {
-	spec *api.AutoscalerSpec
+	config *api.AutoscalerConfig
 }
 
 // NewPanicModeCalculator creates a new panic mode calculator.
-func NewPanicModeCalculator(spec *api.AutoscalerSpec) *PanicModeCalculator {
+func NewPanicModeCalculator(config *api.AutoscalerConfig) *PanicModeCalculator {
 	return &PanicModeCalculator{
-		spec: spec,
+		config: config,
 	}
 }
 
 // CalculatePanicWindow calculates the panic window duration based on the stable window
 // and panic window percentage.
 func (p *PanicModeCalculator) CalculatePanicWindow() time.Duration {
-	return time.Duration(float64(p.spec.StableWindow) * p.spec.PanicWindowPercentage / 100.0)
+	return time.Duration(float64(p.config.StableWindow) * p.config.PanicWindowPercentage / 100.0)
 }
 
 // ShouldEnterPanicMode determines if the autoscaler should enter panic mode
@@ -47,7 +47,7 @@ func (p *PanicModeCalculator) ShouldEnterPanicMode(desiredPodCount, currentPodCo
 		return false
 	}
 	// Enter panic mode if desired pods divided by current pods exceeds the panic threshold
-	return desiredPodCount/currentPodCount >= p.spec.PanicThreshold
+	return desiredPodCount/currentPodCount >= p.config.PanicThreshold
 }
 
 // ShouldExitPanicMode determines if the autoscaler should exit panic mode.
@@ -55,7 +55,7 @@ func (p *PanicModeCalculator) ShouldExitPanicMode(panicStartTime time.Time, now 
 	// Exit panic mode if:
 	// 1. We're no longer over the panic threshold, AND
 	// 2. A full stable window has passed since we were last over the threshold
-	if !isOverThreshold && panicStartTime.Add(p.spec.StableWindow).Before(now) {
+	if !isOverThreshold && panicStartTime.Add(p.config.StableWindow).Before(now) {
 		return true
 	}
 	return false

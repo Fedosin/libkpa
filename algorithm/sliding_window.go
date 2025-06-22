@@ -32,7 +32,7 @@ type SlidingWindowAutoscaler struct {
 	mu sync.RWMutex
 
 	// Configuration
-	spec api.AutoscalerSpec
+	config api.AutoscalerConfig
 
 	// State for panic mode
 	panicTime    time.Time
@@ -47,14 +47,14 @@ const (
 )
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
-func NewSlidingWindowAutoscaler(spec api.AutoscalerSpec, initialScale int32) *SlidingWindowAutoscaler {
+func NewSlidingWindowAutoscaler(config api.AutoscalerConfig, initialScale int32) *SlidingWindowAutoscaler {
 	var maxTimeWindow *maxtimewindow.TimeWindow
-	if spec.ScaleDownDelay > 0 {
-		maxTimeWindow = maxtimewindow.NewTimeWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
+	if config.ScaleDownDelay > 0 {
+		maxTimeWindow = maxtimewindow.NewTimeWindow(config.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
 	result := &SlidingWindowAutoscaler{
-		spec:          spec,
+		config:        config,
 		maxTimeWindow: maxTimeWindow,
 	}
 
@@ -95,23 +95,23 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Calculate scale limits based on current pod count
-	maxScaleUp := int32(math.Ceil(a.spec.MaxScaleUpRate * float64(readyPodCount)))
+	maxScaleUp := int32(math.Ceil(a.config.MaxScaleUpRate * float64(readyPodCount)))
 	maxScaleDown := int32(0)
-	if a.spec.Reachable {
-		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.spec.MaxScaleDownRate))
+	if a.config.Reachable {
+		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.config.MaxScaleDownRate))
 	}
 
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
 	var rawStablePodCount, rawPanicPodCount int32
 
-	if a.spec.TargetValue == 0 {
+	if a.config.TargetValue == 0 {
 		// When target value is zero, any positive metric value would require infinite pods
 		// So we set to a very large value that will be clamped by rate limits and max scale
 		rawStablePodCount = math.MaxInt32
 		rawPanicPodCount = math.MaxInt32
 	} else {
-		rawStablePodCount = int32(math.Ceil(observedStableValue / a.spec.TargetValue))
-		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.spec.TargetValue))
+		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TargetValue))
+		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TargetValue))
 	}
 
 	// Apply scale limits
@@ -119,19 +119,19 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	desiredPanicPodCount := min(max(rawPanicPodCount, maxScaleDown), maxScaleUp)
 
 	// Apply activation scale if needed
-	if a.spec.ActivationScale > 1 {
+	if a.config.ActivationScale > 1 {
 		// Activation scale should apply only when there is actual demand (i.e. raw counts > 0).
 		// This prevents the activation scale from blocking scale-to-zero.
-		if rawStablePodCount > 0 && a.spec.ActivationScale > desiredStablePodCount {
-			desiredStablePodCount = a.spec.ActivationScale
+		if rawStablePodCount > 0 && a.config.ActivationScale > desiredStablePodCount {
+			desiredStablePodCount = a.config.ActivationScale
 		}
-		if rawPanicPodCount > 0 && a.spec.ActivationScale > desiredPanicPodCount {
-			desiredPanicPodCount = a.spec.ActivationScale
+		if rawPanicPodCount > 0 && a.config.ActivationScale > desiredPanicPodCount {
+			desiredPanicPodCount = a.config.ActivationScale
 		}
 	}
 
 	// Check panic mode conditions
-	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.spec.PanicThreshold
+	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.config.PanicThreshold
 	inPanicMode := !a.panicTime.IsZero()
 
 	// Update panic mode state
@@ -143,7 +143,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	case isOverPanicThreshold:
 		// Extend panic mode
 		a.panicTime = now
-	case inPanicMode && !isOverPanicThreshold && a.panicTime.Add(a.spec.StableWindow).Before(now):
+	case inPanicMode && !isOverPanicThreshold && a.panicTime.Add(a.config.StableWindow).Before(now):
 		// Exit panic mode
 		a.panicTime = time.Time{}
 		a.maxPanicPods = 0
@@ -166,24 +166,24 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Apply scale-down delay if configured
-	if a.spec.Reachable && a.maxTimeWindow != nil {
+	if a.config.Reachable && a.maxTimeWindow != nil {
 		a.maxTimeWindow.Record(now, desiredPodCount)
 		desiredPodCount = a.maxTimeWindow.Current()
 	}
 
 	// Apply min/max scale bounds
-	if a.spec.MinScale > 0 && desiredPodCount < a.spec.MinScale {
-		desiredPodCount = a.spec.MinScale
+	if a.config.MinScale > 0 && desiredPodCount < a.config.MinScale {
+		desiredPodCount = a.config.MinScale
 	}
-	if a.spec.MaxScale > 0 && desiredPodCount > a.spec.MaxScale {
-		desiredPodCount = a.spec.MaxScale
+	if a.config.MaxScale > 0 && desiredPodCount > a.config.MaxScale {
+		desiredPodCount = a.config.MaxScale
 	}
 
 	// Calculate excess burst capacity
 	excessBurstCapacity := calculateExcessBurstCapacity(
 		snapshot.ReadyPodCount(),
-		a.spec.TotalValue,
-		a.spec.TargetBurstCapacity,
+		a.config.TotalValue,
+		a.config.TargetBurstCapacity,
 		observedPanicValue,
 	)
 
@@ -192,32 +192,29 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		ExcessBurstCapacity: excessBurstCapacity,
 		ScaleValid:          true,
 		InPanicMode:         inPanicMode,
-		ObservedStableValue: observedStableValue,
-		ObservedPanicValue:  observedPanicValue,
-		CurrentPodCount:     snapshot.ReadyPodCount(),
 	}
 }
 
 // Update reconfigures the autoscaler with a new spec.
-func (a *SlidingWindowAutoscaler) Update(spec api.AutoscalerSpec) error {
+func (a *SlidingWindowAutoscaler) Update(config api.AutoscalerConfig) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.spec = spec
+	a.config = config
 
 	// Update delay window if needed
-	if spec.ScaleDownDelay > 0 {
-		a.maxTimeWindow = maxtimewindow.NewTimeWindow(spec.ScaleDownDelay, scaleDownDelayGranularity)
+	if config.ScaleDownDelay > 0 {
+		a.maxTimeWindow = maxtimewindow.NewTimeWindow(config.ScaleDownDelay, scaleDownDelayGranularity)
 	}
 
 	return nil
 }
 
 // GetSpec returns the current autoscaler spec.
-func (a *SlidingWindowAutoscaler) GetSpec() api.AutoscalerSpec {
+func (a *SlidingWindowAutoscaler) GetConfig() api.AutoscalerConfig {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.spec
+	return a.config
 }
 
 // calculateExcessBurstCapacity computes the excess burst capacity.

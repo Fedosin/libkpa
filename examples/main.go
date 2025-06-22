@@ -31,6 +31,10 @@ import (
 	"github.com/Fedosin/libkpa/transmitter"
 )
 
+const (
+	scalingMetric = "rps"
+)
+
 // MockMetricCollector simulates collecting metrics from pods
 type MockMetricCollector struct {
 	baseLoad float64
@@ -81,14 +85,14 @@ func main() {
 
 	fmt.Println("=== Knative Pod Autoscaler Library Demo ===")
 	fmt.Printf("Configuration:\n")
-	fmt.Printf("  Scaling Metric: %s\n", cfg.ScalingMetric)
+	fmt.Printf("  Scaling Metric: %s\n", scalingMetric)
 	fmt.Printf("  Target Value: %.0f\n", cfg.TargetValue)
 	fmt.Printf("  Stable Window: %s\n", cfg.StableWindow)
 	fmt.Printf("  Min/Max Scale: %d/%d\n", cfg.MinScale, cfg.MaxScale)
 	fmt.Println()
 
 	// Create the autoscaler
-	autoscaler := algorithm.NewSlidingWindowAutoscaler(cfg.AutoscalerSpec,0)
+	autoscaler := algorithm.NewSlidingWindowAutoscaler(*cfg, 0)
 
 	// Create a metric transmitter for logging
 	metricTransmitter := transmitter.NewLogTransmitter(nil)
@@ -206,8 +210,8 @@ func main() {
 
 				// Record metrics
 				metricTransmitter.RecordDesiredPods(ctx, "default", "example-app", recommendation.DesiredPodCount)
-				metricTransmitter.RecordStableValue(ctx, "default", "example-app", cfg.ScalingMetric, stableAvg)
-				metricTransmitter.RecordPanicValue(ctx, "default", "example-app", cfg.ScalingMetric, panicAvg)
+				metricTransmitter.RecordStableValue(ctx, "default", "example-app", scalingMetric, stableAvg)
+				metricTransmitter.RecordPanicValue(ctx, "default", "example-app", scalingMetric, panicAvg)
 				metricTransmitter.RecordPanicMode(ctx, "default", "example-app", recommendation.InPanicMode)
 
 				// Simulate applying the recommendation

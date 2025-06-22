@@ -4,27 +4,27 @@ This document describes the primary API types and interfaces provided by the lib
 
 ## Core Types
 
-### AutoscalerSpec
+### AutoscalerConfig
 
-The `AutoscalerSpec` type defines the parameters for autoscaling behavior:
+The `AutoscalerConfig` type defines the parameters for autoscaling behavior:
 
 ```go
-type AutoscalerSpec struct {
-    MaxScaleUpRate        float64       // Max rate to scale up (e.g., 2.0 = double pods)
-    MaxScaleDownRate      float64       // Max rate to scale down (e.g., 2.0 = halve pods)
-    ScalingMetric         ScalingMetric // Metric type: "concurrency" or "rps"
-    TargetValue           float64       // Target metric value per pod
-    TotalValue            float64       // Total capacity per pod
-    TargetBurstCapacity   float64       // Burst capacity without queuing
-    PanicThreshold        float64       // Threshold to enter panic mode (as ratio)
-    PanicWindowPercentage float64       // Panic window as % of stable window
-    StableWindow          time.Duration // Time window for stable metrics
-    ScaleDownDelay        time.Duration // Delay before scaling down
-    InitialScale          int32         // Initial pod count
-    MinScale              int32         // Minimum pod count
-    MaxScale              int32         // Maximum pod count (0 = unlimited)
-    ActivationScale       int32         // Minimum scale when activating from zero
-    Reachable             bool          // Whether service is reachable
+type AutoscalerConfig struct {
+    MaxScaleUpRate         float64       // Max rate to scale up (e.g., 2.0 = double pods)
+    MaxScaleDownRate       float64       // Max rate to scale down (e.g., 2.0 = halve pods)
+    TargetValue            float64       // Target metric value per pod
+    TotalValue             float64       // Total capacity per pod
+    TargetBurstCapacity    float64       // Burst capacity without queuing
+    PanicThreshold         float64       // Threshold to enter panic mode (as ratio)
+    PanicWindowPercentage  float64       // Panic window as % of stable window
+    StableWindow           time.Duration // Time window for stable metrics
+    ScaleDownDelay         time.Duration // Delay before scaling down
+    MinScale               int32         // Minimum pod count
+    MaxScale               int32         // Maximum pod count (0 = unlimited)
+    ActivationScale        int32         // Minimum scale when activating from zero
+    EnableScaleToZero      bool          // Enable scaling to zero pods
+    ScaleToZeroGracePeriod time.Duration // Grace period before scaling to zero
+    Reachable              bool          // Whether service is reachable (deprecated)
 }
 ```
 
@@ -52,9 +52,6 @@ type ScaleRecommendation struct {
     ExcessBurstCapacity int32   // Excess capacity (negative = insufficient)
     ScaleValid          bool    // Whether recommendation is valid
     InPanicMode         bool    // Whether in panic mode
-    ObservedStableValue float64 // Observed stable window value
-    ObservedPanicValue  float64 // Observed panic window value
-    CurrentPodCount     int32   // Current ready pod count
 }
 ```
 
@@ -70,10 +67,10 @@ type Autoscaler interface {
     Scale(metrics MetricSnapshot, now time.Time) ScaleRecommendation
     
     // Update autoscaler configuration
-    Update(spec AutoscalerSpec) error
+    Update(spec AutoscalerConfig) error
     
     // Get current configuration
-    GetSpec() AutoscalerSpec
+    GetSpec() AutoscalerConfig
 }
 ```
 
@@ -108,10 +105,9 @@ type MetricAggregator interface {
 
 ```go
 // Define autoscaler configuration
-spec := api.AutoscalerSpec{
+spec := api.AutoscalerConfig{
     MaxScaleUpRate:        10.0,
     MaxScaleDownRate:      2.0,
-    ScalingMetric:         api.Concurrency,
     TargetValue:           100.0,
     TotalValue:            1000.0,
     TargetBurstCapacity:   200.0,
@@ -119,10 +115,11 @@ spec := api.AutoscalerSpec{
     PanicWindowPercentage: 10.0,
     StableWindow:          60 * time.Second,
     ScaleDownDelay:        0,
-    InitialScale:          1,
     MinScale:              0,
     MaxScale:              10,
     ActivationScale:       1,
+    EnableScaleToZero:     true,
+    ScaleToZeroGracePeriod: 30 * time.Second,
     Reachable:             true,
 }
 
@@ -153,7 +150,6 @@ ctx := context.Background()
 recommendation := autoscaler.Scale(snapshot, time.Now())
 
 if recommendation.ScaleValid {
-    fmt.Printf("Current pods: %d\n", recommendation.CurrentPodCount)
     fmt.Printf("Desired pods: %d\n", recommendation.DesiredPodCount)
     fmt.Printf("In panic mode: %v\n", recommendation.InPanicMode)
     
