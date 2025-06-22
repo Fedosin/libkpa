@@ -32,10 +32,6 @@ const (
 	EnvPrefix = "AUTOSCALER_"
 
 	// Default values
-	defaultTargetUtilization                  = 0.7
-	defaultContainerConcurrencyTargetFraction = 0.7
-	defaultContainerConcurrencyTargetDefault  = 100.0
-	defaultRPSTargetDefault                   = 200.0
 	defaultMaxScaleUpRate                     = 1000.0
 	defaultMaxScaleDownRate                   = 2.0
 	defaultTargetBurstCapacity                = 211.0
@@ -84,7 +80,7 @@ func (ce *configErrors) Error() string {
 }
 
 // Load creates a Config from environment variables and validates it.
-func Load() (*api.Config, error) {
+func Load() (*api.AutoscalerConfig, error) {
 	errs := &configErrors{}
 
 	enableScaleToZero, err := getEnvBool("ENABLE_SCALE_TO_ZERO", true)
@@ -93,28 +89,16 @@ func Load() (*api.Config, error) {
 	scaleToZeroGracePeriod, err := getEnvDuration("SCALE_TO_ZERO_GRACE_PERIOD", defaultScaleToZeroGracePeriod)
 	errs.add(err)
 
-	containerConcurrencyTargetFraction, err := getEnvFloat("CONTAINER_CONCURRENCY_TARGET_PERCENTAGE", defaultContainerConcurrencyTargetFraction)
-	errs.add(err)
-
-	containerConcurrencyTargetDefault, err := getEnvFloat("CONTAINER_CONCURRENCY_TARGET_DEFAULT", defaultContainerConcurrencyTargetDefault)
-	errs.add(err)
-
-	rpsTargetDefault, err := getEnvFloat("RPS_TARGET_DEFAULT", defaultRPSTargetDefault)
-	errs.add(err)
-
-	targetUtilization, err := getEnvFloat("TARGET_UTILIZATION", defaultTargetUtilization)
-	errs.add(err)
-
 	maxScaleUpRate, err := getEnvFloat("MAX_SCALE_UP_RATE", defaultMaxScaleUpRate)
 	errs.add(err)
 
 	maxScaleDownRate, err := getEnvFloat("MAX_SCALE_DOWN_RATE", defaultMaxScaleDownRate)
 	errs.add(err)
 
-	targetValue, err := getEnvFloat("TARGET_VALUE", defaultContainerConcurrencyTargetDefault)
+	targetValue, err := getEnvFloat("TARGET_VALUE", 0.0)
 	errs.add(err)
 
-	totalValue, err := getEnvFloat("TOTAL_VALUE", 1000.0)
+	totalValue, err := getEnvFloat("TOTAL_VALUE", 0.0)
 	errs.add(err)
 
 	targetBurstCapacity, err := getEnvFloat("TARGET_BURST_CAPACITY", defaultTargetBurstCapacity)
@@ -132,9 +116,6 @@ func Load() (*api.Config, error) {
 	scaleDownDelay, err := getEnvDuration("SCALE_DOWN_DELAY", defaultScaleDownDelay)
 	errs.add(err)
 
-	initialScale, err := getEnvInt32("INITIAL_SCALE", defaultInitialScale)
-	errs.add(err)
-
 	minScale, err := getEnvInt32("MIN_SCALE", defaultMinScale)
 	errs.add(err)
 
@@ -144,52 +125,38 @@ func Load() (*api.Config, error) {
 	activationScale, err := getEnvInt32("ACTIVATION_SCALE", defaultActivationScale)
 	errs.add(err)
 
-	reachable, err := getEnvBool("REACHABLE", true)
-	errs.add(err)
-
 	if errs.hasErrors() {
 		return nil, errs
 	}
 
-	cfg := &api.Config{
+	cfg := &api.AutoscalerConfig{
 		EnableScaleToZero:                  enableScaleToZero,
 		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
-		ContainerConcurrencyTargetFraction: containerConcurrencyTargetFraction,
-		ContainerConcurrencyTargetDefault:  containerConcurrencyTargetDefault,
-		RPSTargetDefault:                   rpsTargetDefault,
-		TargetUtilization:                  targetUtilization,
-		AutoscalerSpec: api.AutoscalerSpec{
-			MaxScaleUpRate:        maxScaleUpRate,
-			MaxScaleDownRate:      maxScaleDownRate,
-			ScalingMetric:         api.ScalingMetric(getEnvString("SCALING_METRIC", string(api.Concurrency))),
-			TargetValue:           targetValue,
-			TotalValue:            totalValue,
-			TargetBurstCapacity:   targetBurstCapacity,
-			PanicThreshold:        panicThreshold,
-			PanicWindowPercentage: panicWindowPercentage,
-			StableWindow:          stableWindow,
-			ScaleDownDelay:        scaleDownDelay,
-			InitialScale:          initialScale,
-			MinScale:              minScale,
-			MaxScale:              maxScale,
-			ActivationScale:       activationScale,
-			Reachable:             reachable,
-		},
+		MaxScaleUpRate:        maxScaleUpRate,
+		MaxScaleDownRate:      maxScaleDownRate,
+		TargetValue:           targetValue,
+		TotalValue:            totalValue,
+		TargetBurstCapacity:   targetBurstCapacity,
+		PanicThreshold:        panicThreshold,
+		PanicWindowPercentage: panicWindowPercentage,
+		StableWindow:          stableWindow,
+		ScaleDownDelay:        scaleDownDelay,
+		MinScale:              minScale,
+		MaxScale:              maxScale,
+		ActivationScale:       activationScale,
 	}
 
 	// Adjust percentage to fraction if needed
-	if cfg.ContainerConcurrencyTargetFraction > 1.0 {
-		cfg.ContainerConcurrencyTargetFraction /= 100.0
-	}
+
 	if cfg.PanicThreshold > 10.0 {
 		cfg.PanicThreshold /= 100.0
 	}
 
-	return validate(cfg)
+	return cfg, nil
 }
 
 // LoadFromMap creates a Config from a map of string values.
-func LoadFromMap(data map[string]string) (*api.Config, error) {
+func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	errs := &configErrors{}
 
 	enableScaleToZero, err := parseBool(data["enable-scale-to-zero"], true)
@@ -198,28 +165,16 @@ func LoadFromMap(data map[string]string) (*api.Config, error) {
 	scaleToZeroGracePeriod, err := parseDuration(data["scale-to-zero-grace-period"], defaultScaleToZeroGracePeriod)
 	errs.add(err)
 
-	containerConcurrencyTargetFraction, err := parseFloat(data["container-concurrency-target-percentage"], defaultContainerConcurrencyTargetFraction)
-	errs.add(err)
-
-	containerConcurrencyTargetDefault, err := parseFloat(data["container-concurrency-target-default"], defaultContainerConcurrencyTargetDefault)
-	errs.add(err)
-
-	rpsTargetDefault, err := parseFloat(data["requests-per-second-target-default"], defaultRPSTargetDefault)
-	errs.add(err)
-
-	targetUtilization, err := parseFloat(data["target-utilization"], defaultTargetUtilization)
-	errs.add(err)
-
 	maxScaleUpRate, err := parseFloat(data["max-scale-up-rate"], defaultMaxScaleUpRate)
 	errs.add(err)
 
 	maxScaleDownRate, err := parseFloat(data["max-scale-down-rate"], defaultMaxScaleDownRate)
 	errs.add(err)
 
-	targetValue, err := parseFloat(data["target-value"], defaultContainerConcurrencyTargetDefault)
+	targetValue, err := parseFloat(data["target-value"], 0.0)
 	errs.add(err)
 
-	totalValue, err := parseFloat(data["total-value"], 1000.0)
+	totalValue, err := parseFloat(data["total-value"], 0.0)
 	errs.add(err)
 
 	targetBurstCapacity, err := parseFloat(data["target-burst-capacity"], defaultTargetBurstCapacity)
@@ -237,9 +192,6 @@ func LoadFromMap(data map[string]string) (*api.Config, error) {
 	scaleDownDelay, err := parseDuration(data["scale-down-delay"], defaultScaleDownDelay)
 	errs.add(err)
 
-	initialScale, err := parseInt32(data["initial-scale"], defaultInitialScale)
-	errs.add(err)
-
 	minScale, err := parseInt32(data["min-scale"], defaultMinScale)
 	errs.add(err)
 
@@ -249,139 +201,108 @@ func LoadFromMap(data map[string]string) (*api.Config, error) {
 	activationScale, err := parseInt32(data["activation-scale"], defaultActivationScale)
 	errs.add(err)
 
-	reachable, err := parseBool(data["reachable"], true)
-	errs.add(err)
-
 	if errs.hasErrors() {
 		return nil, errs
 	}
 
-	cfg := &api.Config{
+	cfg := &api.AutoscalerConfig{
 		EnableScaleToZero:                  enableScaleToZero,
 		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
-		ContainerConcurrencyTargetFraction: containerConcurrencyTargetFraction,
-		ContainerConcurrencyTargetDefault:  containerConcurrencyTargetDefault,
-		RPSTargetDefault:                   rpsTargetDefault,
-		TargetUtilization:                  targetUtilization,
-		AutoscalerSpec: api.AutoscalerSpec{
-			MaxScaleUpRate:        maxScaleUpRate,
-			MaxScaleDownRate:      maxScaleDownRate,
-			ScalingMetric:         api.ScalingMetric(parseString(data["scaling-metric"], string(api.Concurrency))),
-			TargetValue:           targetValue,
-			TotalValue:            totalValue,
-			TargetBurstCapacity:   targetBurstCapacity,
-			PanicThreshold:        panicThreshold,
-			PanicWindowPercentage: panicWindowPercentage,
-			StableWindow:          stableWindow,
-			ScaleDownDelay:        scaleDownDelay,
-			InitialScale:          initialScale,
-			MinScale:              minScale,
-			MaxScale:              maxScale,
-			ActivationScale:       activationScale,
-			Reachable:             reachable,
-		},
+		MaxScaleUpRate:        maxScaleUpRate,
+		MaxScaleDownRate:      maxScaleDownRate,
+		TargetValue:           targetValue,
+		TotalValue:            totalValue,
+		TargetBurstCapacity:   targetBurstCapacity,
+		PanicThreshold:        panicThreshold,
+		PanicWindowPercentage: panicWindowPercentage,
+		StableWindow:          stableWindow,
+		ScaleDownDelay:        scaleDownDelay,
+		MinScale:              minScale,
+		MaxScale:              maxScale,
+		ActivationScale:       activationScale,
 	}
 
 	// Adjust percentage to fraction if needed
-	if cfg.ContainerConcurrencyTargetFraction > 1.0 {
-		cfg.ContainerConcurrencyTargetFraction /= 100.0
-	}
 	if cfg.PanicThreshold > 10.0 {
 		cfg.PanicThreshold /= 100.0
 	}
 
-	return validate(cfg)
+	return cfg, nil
 }
 
 // validate ensures all configuration values are valid.
-func validate(cfg *api.Config) (*api.Config, error) {
+func validate(cfg *api.AutoscalerConfig) error {
+	errs := &configErrors{}
+
 	// Validate scale-to-zero grace period
 	if cfg.ScaleToZeroGracePeriod <= 0 {
-		return nil, fmt.Errorf("scale-to-zero-grace-period must be positive, was: %v", cfg.ScaleToZeroGracePeriod)
+		errs.add(fmt.Errorf("scale-to-zero-grace-period must be positive, was: %v", cfg.ScaleToZeroGracePeriod))
 	}
 
 	// Validate scale-down delay
 	if cfg.ScaleDownDelay < 0 {
-		return nil, fmt.Errorf("scale-down-delay cannot be negative, was: %v", cfg.ScaleDownDelay)
+		errs.add(fmt.Errorf("scale-down-delay cannot be negative, was: %v", cfg.ScaleDownDelay))
 	}
 	if cfg.ScaleDownDelay.Round(time.Second) != cfg.ScaleDownDelay {
-		return nil, fmt.Errorf("scale-down-delay = %v, must be specified with at most second precision", cfg.ScaleDownDelay)
+		errs.add(fmt.Errorf("scale-down-delay = %v, must be specified with at most second precision", cfg.ScaleDownDelay))
 	}
 
 	// Validate target burst capacity
 	if cfg.TargetBurstCapacity < 0 && cfg.TargetBurstCapacity != -1 {
-		return nil, fmt.Errorf("target-burst-capacity must be either non-negative or -1 (for unlimited), was: %f", cfg.TargetBurstCapacity)
-	}
-
-	// Validate container concurrency target fraction
-	if cfg.ContainerConcurrencyTargetFraction <= 0 || cfg.ContainerConcurrencyTargetFraction > 1 {
-		return nil, fmt.Errorf("container-concurrency-target-fraction = %f is outside of valid range of (0, 1]", cfg.ContainerConcurrencyTargetFraction)
+		errs.add(fmt.Errorf("target-burst-capacity must be either non-negative or -1 (for unlimited), was: %f", cfg.TargetBurstCapacity))
 	}
 
 	// Validate target values
-	if x := cfg.ContainerConcurrencyTargetFraction * cfg.ContainerConcurrencyTargetDefault; x < minTargetValue {
-		return nil, fmt.Errorf("container-concurrency-target-fraction and container-concurrency-target-default yield target concurrency of %v, can't be less than %v", x, minTargetValue)
-	}
-	if cfg.RPSTargetDefault < minTargetValue {
-		return nil, fmt.Errorf("rps-target-default must be at least %v, was: %v", minTargetValue, cfg.RPSTargetDefault)
-	}
 	if cfg.TargetValue > cfg.TotalValue {
-		return nil, fmt.Errorf("target-value = %v, must be less than or equal to total-value = %v", cfg.TargetValue, cfg.TotalValue)
+		errs.add(fmt.Errorf("target-value = %v, must be less than or equal to total-value = %v", cfg.TargetValue, cfg.TotalValue))
 	}
 	if cfg.TargetValue <= 0 {
-		return nil, fmt.Errorf("target-value = %v, must be positive", cfg.TargetValue)
+		errs.add(fmt.Errorf("target-value = %v, must be positive", cfg.TargetValue))
 	}
 	if cfg.TotalValue <= 0 {
-		return nil, fmt.Errorf("total-value = %v, must be positive", cfg.TotalValue)
+		errs.add(fmt.Errorf("total-value = %v, must be positive", cfg.TotalValue))
 	}
 
 	// Validate scale rates
 	if cfg.MaxScaleUpRate <= 1.0 {
-		return nil, fmt.Errorf("max-scale-up-rate = %v, must be greater than 1.0", cfg.MaxScaleUpRate)
+		errs.add(fmt.Errorf("max-scale-up-rate = %v, must be greater than 1.0", cfg.MaxScaleUpRate))
 	}
 	if cfg.MaxScaleDownRate <= 1.0 {
-		return nil, fmt.Errorf("max-scale-down-rate = %v, must be greater than 1.0", cfg.MaxScaleDownRate)
+		errs.add(fmt.Errorf("max-scale-down-rate = %v, must be greater than 1.0", cfg.MaxScaleDownRate))
 	}
 
 	// Validate stable window
 	if cfg.StableWindow < minStableWindow || cfg.StableWindow > maxStableWindow {
-		return nil, fmt.Errorf("stable-window = %v, must be in [%v; %v] range", cfg.StableWindow, minStableWindow, maxStableWindow)
+		errs.add(fmt.Errorf("stable-window = %v, must be in [%v; %v] range", cfg.StableWindow, minStableWindow, maxStableWindow))
 	}
 	if cfg.StableWindow.Round(time.Second) != cfg.StableWindow {
-		return nil, fmt.Errorf("stable-window = %v, must be specified with at most second precision", cfg.StableWindow)
+		errs.add(fmt.Errorf("stable-window = %v, must be specified with at most second precision", cfg.StableWindow))
 	}
 
 	// Validate panic window percentage
 	if cfg.PanicWindowPercentage < 1.0 || cfg.PanicWindowPercentage > 100.0 {
-		return nil, fmt.Errorf("panic-window-percentage = %v, must be in [1.0, 100.0] interval", cfg.PanicWindowPercentage)
+		errs.add(fmt.Errorf("panic-window-percentage = %v, must be in [1.0, 100.0] interval", cfg.PanicWindowPercentage))
 	}
 
 	// Validate scale bounds
-	if cfg.InitialScale < 0 {
-		return nil, fmt.Errorf("initial-scale = %v, must be at least 0", cfg.InitialScale)
-	}
 	if cfg.MinScale < 0 {
-		return nil, fmt.Errorf("min-scale = %v, must be at least 0", cfg.MinScale)
+		errs.add(fmt.Errorf("min-scale = %v, must be at least 0", cfg.MinScale))
 	}
 	if cfg.MaxScale < 0 {
-		return nil, fmt.Errorf("max-scale = %v, must be at least 0", cfg.MaxScale)
+		errs.add(fmt.Errorf("max-scale = %v, must be at least 0", cfg.MaxScale))
 	}
 	if cfg.MinScale > cfg.MaxScale && cfg.MaxScale > 0 {
-		return nil, fmt.Errorf("min-scale (%d) must be less than or equal to max-scale (%d)", cfg.MinScale, cfg.MaxScale)
+		errs.add(fmt.Errorf("min-scale (%d) must be less than or equal to max-scale (%d)", cfg.MinScale, cfg.MaxScale))
 	}
 	if cfg.ActivationScale < 1 {
-		return nil, fmt.Errorf("activation-scale = %v, must be at least 1", cfg.ActivationScale)
+		errs.add(fmt.Errorf("activation-scale = %v, must be at least 1", cfg.ActivationScale))
 	}
 
-	// Validate scaling metric
-	switch cfg.ScalingMetric {
-	case api.Concurrency, api.RPS:
-		// Valid
-	default:
-		return nil, fmt.Errorf("scaling-metric = %s, must be either 'concurrency' or 'rps'", cfg.ScalingMetric)
+	if errs.hasErrors() {
+		return errs
 	}
 
-	return cfg, nil
+	return nil
 }
 
 // Helper functions for environment variable parsing

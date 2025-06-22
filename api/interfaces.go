@@ -28,10 +28,10 @@ type Autoscaler interface {
 	Scale(metrics MetricSnapshot, now time.Time) ScaleRecommendation
 
 	// Update reconfigures the autoscaler with a new spec.
-	Update(spec AutoscalerSpec) error
+	Update(spec AutoscalerConfig) error
 
 	// GetSpec returns the current autoscaler spec.
-	GetSpec() AutoscalerSpec
+	GetSpec() AutoscalerConfig
 }
 
 // MetricClient defines the interface for retrieving metrics.
@@ -85,5 +85,5 @@ type MetricAggregator interface {
 // Reporter reports autoscaler metrics for monitoring.
 type Reporter interface {
 	// ReportMetrics reports the current state of the autoscaler.
-	ReportMetrics(ctx context.Context, spec AutoscalerSpec, recommendation ScaleRecommendation)
+	ReportMetrics(ctx context.Context, spec AutoscalerConfig, recommendation ScaleRecommendation)
 }

@@ -19,391 +19,801 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
 )
 
-func TestLoadFromMap(t *testing.T) {
+func TestConfigErrors(t *testing.T) {
 	tests := []struct {
-		name    string
-		data    map[string]string
-		wantErr bool
-		check   func(*testing.T, *api.Config)
+		name     string
+		errors   []error
+		expected string
+		hasError bool
 	}{
 		{
-			name: "valid config with all values",
-			data: map[string]string{
-				"scaling-metric":                          "rps",
-				"target-value":                            "150",
-				"max-scale-up-rate":                       "5.0",
-				"max-scale-down-rate":                     "3.0",
-				"stable-window":                           "120s",
-				"scale-down-delay":                        "30s",
-				"panic-threshold-percentage":              "150",
-				"panic-window-percentage":                 "20",
-				"initial-scale":                           "2",
-				"min-scale":                               "1",
-				"max-scale":                               "20",
-				"activation-scale":                        "2",
-				"target-burst-capacity":                   "300",
-				"container-concurrency-target-percentage": "80",
-				"enable-scale-to-zero":                    "false",
-			},
-			wantErr: false,
-			check: func(t *testing.T, cfg *api.Config) {
-				if cfg.ScalingMetric != api.RPS {
-					t.Errorf("ScalingMetric = %v, want %v", cfg.ScalingMetric, api.RPS)
-				}
-				if cfg.TargetValue != 150 {
-					t.Errorf("TargetValue = %v, want 150", cfg.TargetValue)
-				}
-				if cfg.MaxScaleUpRate != 5.0 {
-					t.Errorf("MaxScaleUpRate = %v, want 5.0", cfg.MaxScaleUpRate)
-				}
-				if cfg.StableWindow != 120*time.Second {
-					t.Errorf("StableWindow = %v, want 120s", cfg.StableWindow)
-				}
-				if cfg.PanicThreshold != 1.5 {
-					t.Errorf("PanicThreshold = %v, want 1.5", cfg.PanicThreshold)
-				}
-				if cfg.MinScale != 1 {
-					t.Errorf("MinScale = %v, want 1", cfg.MinScale)
-				}
-				if cfg.EnableScaleToZero != false {
-					t.Errorf("EnableScaleToZero = %v, want false", cfg.EnableScaleToZero)
-				}
-			},
+			name:     "no errors",
+			errors:   []error{},
+			expected: "",
+			hasError: false,
 		},
 		{
-			name: "default values",
-			data: map[string]string{},
-			check: func(t *testing.T, cfg *api.Config) {
-				if cfg.ScalingMetric != api.Concurrency {
-					t.Errorf("ScalingMetric = %v, want %v", cfg.ScalingMetric, api.Concurrency)
-				}
-				if cfg.TargetValue != 100.0 {
-					t.Errorf("TargetValue = %v, want 100.0", cfg.TargetValue)
-				}
-				if cfg.MaxScaleUpRate != 1000.0 {
-					t.Errorf("MaxScaleUpRate = %v, want 1000.0", cfg.MaxScaleUpRate)
-				}
-				if cfg.StableWindow != 60*time.Second {
-					t.Errorf("StableWindow = %v, want 60s", cfg.StableWindow)
-				}
-			},
+			name:     "single error",
+			errors:   []error{fmt.Errorf("error 1")},
+			expected: "configuration errors:\n  - error 1",
+			hasError: true,
 		},
 		{
-			name: "invalid max-scale-up-rate",
-			data: map[string]string{
-				"max-scale-up-rate": "0.5",
-			},
-			wantErr: true,
+			name:     "multiple errors",
+			errors:   []error{fmt.Errorf("error 1"), fmt.Errorf("error 2"), fmt.Errorf("error 3")},
+			expected: "configuration errors:\n  - error 1\n  - error 2\n  - error 3",
+			hasError: true,
 		},
 		{
-			name: "invalid max-scale-down-rate",
-			data: map[string]string{
-				"max-scale-down-rate": "1.0",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid stable window too small",
-			data: map[string]string{
-				"stable-window": "2s",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid stable window too large",
-			data: map[string]string{
-				"stable-window": "700s",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid panic window percentage",
-			data: map[string]string{
-				"panic-window-percentage": "0.5",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid min-scale negative",
-			data: map[string]string{
-				"min-scale": "-1",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid min-scale greater than max-scale",
-			data: map[string]string{
-				"min-scale": "10",
-				"max-scale": "5",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid activation-scale",
-			data: map[string]string{
-				"activation-scale": "0",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid scaling metric",
-			data: map[string]string{
-				"scaling-metric": "invalid",
-			},
-			wantErr: true,
-		},
-		{
-			name: "percentage conversion",
-			data: map[string]string{
-				"container-concurrency-target-percentage": "70",
-				"panic-threshold-percentage":              "200",
-			},
-			check: func(t *testing.T, cfg *api.Config) {
-				if cfg.ContainerConcurrencyTargetFraction != 0.7 {
-					t.Errorf("ContainerConcurrencyTargetFraction = %v, want 0.7", cfg.ContainerConcurrencyTargetFraction)
-				}
-				if cfg.PanicThreshold != 2.0 {
-					t.Errorf("PanicThreshold = %v, want 2.0", cfg.PanicThreshold)
-				}
-			},
+			name:     "nil errors are ignored",
+			errors:   []error{fmt.Errorf("error 1"), nil, fmt.Errorf("error 2")},
+			expected: "configuration errors:\n  - error 1\n  - error 2",
+			hasError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := LoadFromMap(tt.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadFromMap() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			ce := &configErrors{}
+			for _, err := range tt.errors {
+				ce.add(err)
 			}
-			if !tt.wantErr && tt.check != nil {
-				tt.check(t, cfg)
+
+			if got := ce.hasErrors(); got != tt.hasError {
+				t.Errorf("hasErrors() = %v, want %v", got, tt.hasError)
+			}
+
+			if got := ce.Error(); got != tt.expected {
+				t.Errorf("Error() = %q, want %q", got, tt.expected)
 			}
 		})
 	}
 }
 
-func TestLoadFromEnvironment(t *testing.T) {
-	// Save current environment
-	envVars := []string{
-		"AUTOSCALER_SCALING_METRIC",
-		"AUTOSCALER_TARGET_VALUE",
-		"AUTOSCALER_MAX_SCALE_UP_RATE",
-		"AUTOSCALER_STABLE_WINDOW",
-		"AUTOSCALER_MIN_SCALE",
-		"AUTOSCALER_ENABLE_SCALE_TO_ZERO",
-	}
-	saved := make(map[string]string)
-	for _, key := range envVars {
-		saved[key] = os.Getenv(key)
-		os.Unsetenv(key)
-	}
+func TestLoad(t *testing.T) {
+	// Save original env and restore after test
+	originalEnv := os.Environ()
 	defer func() {
-		for key, value := range saved {
-			if value != "" {
-				os.Setenv(key, value)
+		os.Clearenv()
+		for _, e := range originalEnv {
+			pair := splitEnvPair(e)
+			if len(pair) == 2 {
+				os.Setenv(pair[0], pair[1])
 			}
 		}
 	}()
 
-	// Set test environment
-	os.Setenv("AUTOSCALER_SCALING_METRIC", "rps")
-	os.Setenv("AUTOSCALER_TARGET_VALUE", "200")
-	os.Setenv("AUTOSCALER_MAX_SCALE_UP_RATE", "10")
-	os.Setenv("AUTOSCALER_STABLE_WINDOW", "90s")
-	os.Setenv("AUTOSCALER_MIN_SCALE", "2")
-	os.Setenv("AUTOSCALER_ENABLE_SCALE_TO_ZERO", "false")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	// Check loaded values
-	if cfg.ScalingMetric != api.RPS {
-		t.Errorf("ScalingMetric = %v, want %v", cfg.ScalingMetric, api.RPS)
-	}
-	if cfg.TargetValue != 200 {
-		t.Errorf("TargetValue = %v, want 200", cfg.TargetValue)
-	}
-	if cfg.MaxScaleUpRate != 10 {
-		t.Errorf("MaxScaleUpRate = %v, want 10", cfg.MaxScaleUpRate)
-	}
-	if cfg.StableWindow != 90*time.Second {
-		t.Errorf("StableWindow = %v, want 90s", cfg.StableWindow)
-	}
-	if cfg.MinScale != 2 {
-		t.Errorf("MinScale = %v, want 2", cfg.MinScale)
-	}
-	if cfg.EnableScaleToZero != false {
-		t.Errorf("EnableScaleToZero = %v, want false", cfg.EnableScaleToZero)
-	}
-}
-
-func TestValidationErrors(t *testing.T) {
 	tests := []struct {
 		name    string
-		modify  func(*api.Config)
-		wantErr string
+		envVars map[string]string
+		want    *api.AutoscalerConfig
+		wantErr bool
+		errMsg  string
 	}{
 		{
-			name: "negative scale-to-zero-grace-period",
-			modify: func(cfg *api.Config) {
-				cfg.ScaleToZeroGracePeriod = -1 * time.Second
+			name:    "default values when no env vars set",
+			envVars: map[string]string{},
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      true,
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalValue:             0.0,
+				TargetBurstCapacity:    211.0,
+				PanicThreshold:         2.0, // 200% converted to fraction
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               0,
+				MaxScale:               0,
+				ActivationScale:        1,
 			},
-			wantErr: "scale-to-zero-grace-period must be positive",
 		},
 		{
-			name: "negative scale-down-delay",
-			modify: func(cfg *api.Config) {
-				cfg.ScaleDownDelay = -1 * time.Second
+			name: "custom values from env vars",
+			envVars: map[string]string{
+				"AUTOSCALER_ENABLE_SCALE_TO_ZERO":       "false",
+				"AUTOSCALER_SCALE_TO_ZERO_GRACE_PERIOD": "45s",
+				"AUTOSCALER_MAX_SCALE_UP_RATE":          "500.5",
+				"AUTOSCALER_MAX_SCALE_DOWN_RATE":        "3.5",
+				"AUTOSCALER_TARGET_VALUE":               "100.0",
+				"AUTOSCALER_TOTAL_VALUE":                "200.0",
+				"AUTOSCALER_TARGET_BURST_CAPACITY":      "150.0",
+				"AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE": "150.0",
+				"AUTOSCALER_PANIC_WINDOW_PERCENTAGE":    "20.0",
+				"AUTOSCALER_STABLE_WINDOW":              "120s",
+				"AUTOSCALER_SCALE_DOWN_DELAY":           "10s",
+				"AUTOSCALER_MIN_SCALE":                  "1",
+				"AUTOSCALER_MAX_SCALE":                  "10",
+				"AUTOSCALER_ACTIVATION_SCALE":           "2",
 			},
-			wantErr: "scale-down-delay cannot be negative",
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      false,
+				ScaleToZeroGracePeriod: 45 * time.Second,
+				MaxScaleUpRate:         500.5,
+				MaxScaleDownRate:       3.5,
+				TargetValue:            100.0,
+				TotalValue:             200.0,
+				TargetBurstCapacity:    150.0,
+				PanicThreshold:         1.5, // 150% converted to fraction
+				PanicWindowPercentage:  20.0,
+				StableWindow:           120 * time.Second,
+				ScaleDownDelay:         10 * time.Second,
+				MinScale:               1,
+				MaxScale:               10,
+				ActivationScale:        2,
+			},
 		},
 		{
-			name: "sub-second scale-down-delay",
-			modify: func(cfg *api.Config) {
-				cfg.ScaleDownDelay = 500 * time.Millisecond
+			name: "panic threshold already as fraction",
+			envVars: map[string]string{
+				"AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE": "2.5",
 			},
-			wantErr: "must be specified with at most second precision",
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      true,
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalValue:             0.0,
+				TargetBurstCapacity:    211.0,
+				PanicThreshold:         2.5, // Already a fraction, not converted
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               0,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
 		},
 		{
-			name: "invalid target-burst-capacity",
-			modify: func(cfg *api.Config) {
-				cfg.TargetBurstCapacity = -2
+			name: "invalid boolean value",
+			envVars: map[string]string{
+				"AUTOSCALER_ENABLE_SCALE_TO_ZERO": "invalid",
 			},
-			wantErr: "target-burst-capacity must be either non-negative or -1",
+			wantErr: true,
+			errMsg:  "invalid boolean value",
 		},
 		{
-			name: "container-concurrency-target-fraction too low",
-			modify: func(cfg *api.Config) {
-				cfg.ContainerConcurrencyTargetFraction = 0
+			name: "invalid float value",
+			envVars: map[string]string{
+				"AUTOSCALER_MAX_SCALE_UP_RATE": "not-a-number",
 			},
-			wantErr: "outside of valid range of (0, 1]",
+			wantErr: true,
+			errMsg:  "invalid float value",
 		},
 		{
-			name: "container-concurrency-target-fraction too high",
-			modify: func(cfg *api.Config) {
-				cfg.ContainerConcurrencyTargetFraction = 1.1
+			name: "invalid duration value",
+			envVars: map[string]string{
+				"AUTOSCALER_STABLE_WINDOW": "invalid-duration",
 			},
-			wantErr: "outside of valid range of (0, 1]",
+			wantErr: true,
+			errMsg:  "invalid duration value",
 		},
 		{
-			name: "target concurrency too low",
-			modify: func(cfg *api.Config) {
-				cfg.ContainerConcurrencyTargetFraction = 0.0001
-				cfg.ContainerConcurrencyTargetDefault = 1
+			name: "invalid int32 value",
+			envVars: map[string]string{
+				"AUTOSCALER_MIN_SCALE": "not-an-int",
 			},
-			wantErr: "can't be less than",
+			wantErr: true,
+			errMsg:  "invalid int32 value",
 		},
 		{
-			name: "rps target too low",
-			modify: func(cfg *api.Config) {
-				cfg.RPSTargetDefault = 0.001
+			name: "multiple errors",
+			envVars: map[string]string{
+				"AUTOSCALER_MIN_SCALE":     "invalid",
+				"AUTOSCALER_STABLE_WINDOW": "also-invalid",
 			},
-			wantErr: "must be at least",
+			wantErr: true,
+			errMsg:  "configuration errors:",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &api.Config{
-				EnableScaleToZero:                  true,
-				ScaleToZeroGracePeriod:             30 * time.Second,
-				ContainerConcurrencyTargetFraction: 0.7,
-				ContainerConcurrencyTargetDefault:  100,
-				RPSTargetDefault:                   200,
-				TargetUtilization:                  0.7,
-				AutoscalerSpec: api.AutoscalerSpec{
-					MaxScaleUpRate:        1000,
-					MaxScaleDownRate:      2,
-					ScalingMetric:         api.Concurrency,
-					TargetValue:           100,
-					TotalValue:            1000,
-					TargetBurstCapacity:   211,
-					PanicThreshold:        2,
-					PanicWindowPercentage: 10,
-					StableWindow:          60 * time.Second,
-					ScaleDownDelay:        0,
-					InitialScale:          1,
-					MinScale:              0,
-					MaxScale:              0,
-					ActivationScale:       1,
-					Reachable:             true,
-				},
+			// Clear env and set test values
+			os.Clearenv()
+			for k, v := range tt.envVars {
+				os.Setenv(k, v)
 			}
 
-			tt.modify(cfg)
-			_, err := validate(cfg)
-			if err == nil {
-				t.Errorf("validate() error = nil, want error containing %q", tt.wantErr)
-			} else if !contains(err.Error(), tt.wantErr) {
-				t.Errorf("validate() error = %v, want error containing %q", err, tt.wantErr)
+			got, err := Load()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Load() error = nil, wantErr %v", tt.wantErr)
+					return
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("Load() error = %v, should contain %v", err, tt.errMsg)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Load() unexpected error = %v", err)
+				return
+			}
+
+			if !configsEqual(got, tt.want) {
+				t.Errorf("Load() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestErrorAggregation(t *testing.T) {
-	// Set up some invalid environment variables
-	os.Setenv("AUTOSCALER_ENABLE_SCALE_TO_ZERO", "invalid-bool")
-	os.Setenv("AUTOSCALER_MAX_SCALE_UP_RATE", "not-a-number")
-	os.Setenv("AUTOSCALER_STABLE_WINDOW", "invalid-duration")
-	os.Setenv("AUTOSCALER_MIN_SCALE", "abc")
-	defer func() {
-		os.Unsetenv("AUTOSCALER_ENABLE_SCALE_TO_ZERO")
-		os.Unsetenv("AUTOSCALER_MAX_SCALE_UP_RATE")
-		os.Unsetenv("AUTOSCALER_STABLE_WINDOW")
-		os.Unsetenv("AUTOSCALER_MIN_SCALE")
-	}()
-
-	// Try to load configuration
-	cfg, err := Load()
-	if err == nil {
-		t.Fatal("expected error but got none")
+func TestLoadFromMap(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    map[string]string
+		want    *api.AutoscalerConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "default values with empty map",
+			data: map[string]string{},
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      true,
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalValue:             0.0,
+				TargetBurstCapacity:    211.0,
+				PanicThreshold:         2.0,
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               0,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
+		},
+		{
+			name: "custom values from map",
+			data: map[string]string{
+				"enable-scale-to-zero":       "false",
+				"scale-to-zero-grace-period": "45s",
+				"max-scale-up-rate":          "500.5",
+				"max-scale-down-rate":        "3.5",
+				"target-value":               "100.0",
+				"total-value":                "200.0",
+				"target-burst-capacity":      "150.0",
+				"panic-threshold-percentage": "150.0",
+				"panic-window-percentage":    "20.0",
+				"stable-window":              "120s",
+				"scale-down-delay":           "10s",
+				"min-scale":                  "1",
+				"max-scale":                  "10",
+				"activation-scale":           "2",
+			},
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      false,
+				ScaleToZeroGracePeriod: 45 * time.Second,
+				MaxScaleUpRate:         500.5,
+				MaxScaleDownRate:       3.5,
+				TargetValue:            100.0,
+				TotalValue:             200.0,
+				TargetBurstCapacity:    150.0,
+				PanicThreshold:         1.5,
+				PanicWindowPercentage:  20.0,
+				StableWindow:           120 * time.Second,
+				ScaleDownDelay:         10 * time.Second,
+				MinScale:               1,
+				MaxScale:               10,
+				ActivationScale:        2,
+			},
+		},
+		{
+			name: "values with whitespace",
+			data: map[string]string{
+				"max-scale-up-rate": "  500.5  ",
+				"min-scale":         " 5 ",
+				"stable-window":     " 30s ",
+			},
+			want: &api.AutoscalerConfig{
+				EnableScaleToZero:      true,
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         500.5,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalValue:             0.0,
+				TargetBurstCapacity:    211.0,
+				PanicThreshold:         2.0,
+				PanicWindowPercentage:  10.0,
+				StableWindow:           30 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               5,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
+		},
+		{
+			name: "invalid boolean",
+			data: map[string]string{
+				"enable-scale-to-zero": "yes",
+			},
+			wantErr: true,
+			errMsg:  "invalid boolean value",
+		},
+		{
+			name: "invalid float",
+			data: map[string]string{
+				"target-value": "abc",
+			},
+			wantErr: true,
+			errMsg:  "invalid float value",
+		},
+		{
+			name: "invalid duration",
+			data: map[string]string{
+				"scale-down-delay": "10 minutes",
+			},
+			wantErr: true,
+			errMsg:  "invalid duration value",
+		},
+		{
+			name: "invalid int32",
+			data: map[string]string{
+				"max-scale": "10.5",
+			},
+			wantErr: true,
+			errMsg:  "invalid int32 value",
+		},
 	}
 
-	// Print the aggregated error
-	fmt.Printf("Error message:\n%v\n", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := LoadFromMap(tt.data)
 
-	// Verify that cfg is nil when there are errors
-	if cfg != nil {
-		t.Fatal("expected nil config when errors occur")
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("LoadFromMap() error = nil, wantErr %v", tt.wantErr)
+					return
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("LoadFromMap() error = %v, should contain %v", err, tt.errMsg)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("LoadFromMap() unexpected error = %v", err)
+				return
+			}
+
+			if !configsEqual(got, tt.want) {
+				t.Errorf("LoadFromMap() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestErrorAggregationFromMap(t *testing.T) {
-	// Create a map with invalid values
-	data := map[string]string{
-		"enable-scale-to-zero":    "not-bool",
-		"max-scale-up-rate":       "invalid-float",
-		"stable-window":           "bad-duration",
-		"initial-scale":           "negative-one",
-		"panic-window-percentage": "not-a-percentage",
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *api.AutoscalerConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid config",
+			config: &api.AutoscalerConfig{
+				EnableScaleToZero:      true,
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            100.0,
+				TotalValue:             200.0,
+				TargetBurstCapacity:    211.0,
+				PanicThreshold:         2.0,
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         10 * time.Second,
+				MinScale:               0,
+				MaxScale:               10,
+				ActivationScale:        1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative scale-to-zero grace period",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: -1 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "scale-to-zero-grace-period must be positive",
+		},
+		{
+			name: "negative scale-down delay",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				ScaleDownDelay:         -5 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "scale-down-delay cannot be negative",
+		},
+		{
+			name: "scale-down delay with sub-second precision",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				ScaleDownDelay:         5*time.Second + 500*time.Millisecond,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "must be specified with at most second precision",
+		},
+		{
+			name: "invalid target burst capacity",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				TargetBurstCapacity:    -5.0,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "target-burst-capacity must be either non-negative or -1",
+		},
+		{
+			name: "target burst capacity unlimited (-1)",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				TargetBurstCapacity:    -1.0,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				PanicWindowPercentage:  10.0,
+				ActivationScale:        1,
+			},
+			wantErr: false,
+		},
+		{
+			name: "target value greater than total value",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            100.0,
+				TotalValue:             50.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "target-value = 100, must be less than or equal to total-value = 50",
+		},
+		{
+			name: "negative target value",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            -1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "target-value = -1, must be positive",
+		},
+		{
+			name: "negative total value",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             -2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "total-value = -2, must be positive",
+		},
+		{
+			name: "max scale up rate too low",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         0.5,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "max-scale-up-rate = 0.5, must be greater than 1.0",
+		},
+		{
+			name: "max scale down rate too low",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       1.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "max-scale-down-rate = 1, must be greater than 1.0",
+		},
+		{
+			name: "stable window too short",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           2 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "stable-window = 2s, must be in [5s; 10m0s] range",
+		},
+		{
+			name: "stable window too long",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           700 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "stable-window = 11m40s, must be in [5s; 10m0s] range",
+		},
+		{
+			name: "stable window with sub-second precision",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60*time.Second + 100*time.Millisecond,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "stable-window = 1m0.1s, must be specified with at most second precision",
+		},
+		{
+			name: "panic window percentage too low",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				PanicWindowPercentage:  0.5,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "panic-window-percentage = 0.5, must be in [1.0, 100.0] interval",
+		},
+		{
+			name: "panic window percentage too high",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				PanicWindowPercentage:  101.0,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "panic-window-percentage = 101, must be in [1.0, 100.0] interval",
+		},
+		{
+			name: "negative min scale",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				MinScale:               -1,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "min-scale = -1, must be at least 0",
+		},
+		{
+			name: "negative max scale",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				MaxScale:               -1,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "max-scale = -1, must be at least 0",
+		},
+		{
+			name: "min scale greater than max scale",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				MinScale:               10,
+				MaxScale:               5,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "min-scale (10) must be less than or equal to max-scale (5)",
+		},
+		{
+			name: "min scale greater than max scale but max scale is 0",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				PanicWindowPercentage:  10.0,
+				MinScale:               10,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
+			wantErr: false, // This should be valid as max scale 0 means unlimited
+		},
+		{
+			name: "activation scale less than 1",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            1.0,
+				TotalValue:             2.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        0,
+			},
+			wantErr: true,
+			errMsg:  "activation-scale = 0, must be at least 1",
+		},
+		{
+			name: "multiple validation errors",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: -1 * time.Second,
+				MaxScaleUpRate:         0.5,
+				MaxScaleDownRate:       0.5,
+				TargetValue:            -1.0,
+				TotalValue:             -2.0,
+				StableWindow:           1 * time.Second,
+				MinScale:               -1,
+				MaxScale:               -1,
+				ActivationScale:        0,
+			},
+			wantErr: true,
+			errMsg:  "configuration errors:",
+		},
 	}
 
-	// Try to load configuration
-	cfg, err := LoadFromMap(data)
-	if err == nil {
-		t.Fatal("expected error but got none")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate(tt.config)
 
-	// Print the aggregated error
-	fmt.Printf("Error message from map:\n%v\n", err)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validate() error = nil, wantErr %v", tt.wantErr)
+					return
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("validate() error = %v, should contain %v", err, tt.errMsg)
+				}
+				return
+			}
 
-	// Verify that cfg is nil when there are errors
-	if cfg != nil {
-		t.Fatal("expected nil config when errors occur")
+			if err != nil {
+				t.Errorf("validate() unexpected error = %v", err)
+			}
+		})
 	}
 }
 
+func TestHelperFunctions(t *testing.T) {
+	// Test getEnvString
+	t.Run("getEnvString", func(t *testing.T) {
+		os.Setenv("AUTOSCALER_TEST_STRING", "test-value")
+		defer os.Unsetenv("AUTOSCALER_TEST_STRING")
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || len(s) > len(substr) && contains(s[1:], substr)
+		if got := getEnvString("TEST_STRING", "default"); got != "test-value" {
+			t.Errorf("getEnvString() = %v, want %v", got, "test-value")
+		}
+
+		if got := getEnvString("NON_EXISTENT", "default"); got != "default" {
+			t.Errorf("getEnvString() = %v, want %v", got, "default")
+		}
+	})
+
+	// Test parseString
+	t.Run("parseString", func(t *testing.T) {
+		if got := parseString("test", "default"); got != "test" {
+			t.Errorf("parseString() = %v, want %v", got, "test")
+		}
+
+		if got := parseString("", "default"); got != "default" {
+			t.Errorf("parseString() = %v, want %v", got, "default")
+		}
+	})
+}
+
+// Helper functions for testing
+
+func splitEnvPair(e string) []string {
+	if idx := strings.Index(e, "="); idx != -1 {
+		return []string{e[:idx], e[idx+1:]}
+	}
+	return []string{e}
+}
+
+func containsString(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+func configsEqual(a, b *api.AutoscalerConfig) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	return a.EnableScaleToZero == b.EnableScaleToZero &&
+		a.ScaleToZeroGracePeriod == b.ScaleToZeroGracePeriod &&
+		a.MaxScaleUpRate == b.MaxScaleUpRate &&
+		a.MaxScaleDownRate == b.MaxScaleDownRate &&
+		a.TargetValue == b.TargetValue &&
+		a.TotalValue == b.TotalValue &&
+		a.TargetBurstCapacity == b.TargetBurstCapacity &&
+		a.PanicThreshold == b.PanicThreshold &&
+		a.PanicWindowPercentage == b.PanicWindowPercentage &&
+		a.StableWindow == b.StableWindow &&
+		a.ScaleDownDelay == b.ScaleDownDelay &&
+		a.MinScale == b.MinScale &&
+		a.MaxScale == b.MaxScale &&
+		a.ActivationScale == b.ActivationScale
 }

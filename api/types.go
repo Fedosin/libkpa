@@ -21,18 +21,8 @@ import (
 	"time"
 )
 
-// ScalingMetric represents the metric type used for autoscaling decisions.
-type ScalingMetric string
-
-const (
-	// Concurrency specifies the scaling should be based on in-flight requests.
-	Concurrency ScalingMetric = "concurrency"
-	// RPS specifies the scaling should be based on requests per second.
-	RPS ScalingMetric = "rps"
-)
-
-// AutoscalerSpec defines the parameters for autoscaling behavior.
-type AutoscalerSpec struct {
+// AutoscalerConfig defines the parameters for autoscaling behavior.
+type AutoscalerConfig struct {
 	// MaxScaleUpRate is the maximum rate at which the autoscaler will scale up pods.
 	// It must be greater than 1.0. For example, a value of 2.0 allows scaling up
 	// by at most doubling the pod count. Default is 1000.0.
@@ -43,19 +33,11 @@ type AutoscalerSpec struct {
 	// by at most halving the pod count. Default is 2.0.
 	MaxScaleDownRate float64
 
-	// ScalingMetric is the metric used for scaling decisions (concurrency or rps).
-	// Default is Concurrency.
-	ScalingMetric ScalingMetric
-
 	// TargetValue is the desired value of the scaling metric per pod that we aim to maintain.
-	// For concurrency, this is the number of concurrent requests per pod.
-	// For RPS, this is the number of requests per second per pod.
 	// This must be less than or equal to TotalValue. Default is 100.0.
 	TargetValue float64
 
 	// TotalValue is the total capacity of the scaling metric that a pod can handle.
-	// For concurrency, this is the maximum concurrent requests a pod can handle.
-	// For RPS, this is the maximum requests per second a pod can handle.
 	// Default is 1000.0.
 	TotalValue float64
 
@@ -81,10 +63,6 @@ type AutoscalerSpec struct {
 	// before scaling down. Default is 0s (immediate scale down).
 	ScaleDownDelay time.Duration
 
-	// InitialScale is the initial number of pods to create. Must be >= 0.
-	// Default is 1.
-	InitialScale int32
-
 	// MinScale is the minimum number of pods to maintain. Must be >= 0.
 	// Default is 0 (can scale to zero).
 	MinScale int32
@@ -97,8 +75,16 @@ type AutoscalerSpec struct {
 	// Must be >= 1. Default is 1.
 	ActivationScale int32
 
+	// EnableScaleToZero enables scaling to zero pods. Default is true.
+	EnableScaleToZero bool
+
+	// ScaleToZeroGracePeriod is the time to wait before scaling to zero
+	// after the service becomes idle. Default is 30s.
+	ScaleToZeroGracePeriod time.Duration
+
 	// Reachable indicates whether the service is reachable (has active traffic).
 	// This affects scale-down behavior. Default is true.
+	// Deprecated: Used in legacy scaling mode to support Knative Serving revisions.
 	Reachable bool
 }
 
@@ -136,41 +122,4 @@ type ScaleRecommendation struct {
 
 	// InPanicMode indicates whether the autoscaler is in panic mode.
 	InPanicMode bool
-
-	// ObservedStableValue is the observed metric value over the stable window.
-	ObservedStableValue float64
-
-	// ObservedPanicValue is the observed metric value over the panic window.
-	ObservedPanicValue float64
-
-	// CurrentPodCount is the current number of ready pods.
-	CurrentPodCount int32
-}
-
-// Config represents the complete autoscaler configuration.
-type Config struct {
-	// AutoscalerSpec contains the core autoscaling parameters.
-	AutoscalerSpec
-
-	// EnableScaleToZero enables scaling to zero pods. Default is true.
-	EnableScaleToZero bool
-
-	// ScaleToZeroGracePeriod is the time to wait before scaling to zero
-	// after the service becomes idle. Default is 30s.
-	ScaleToZeroGracePeriod time.Duration
-
-	// ContainerConcurrencyTargetFraction is the fraction of container concurrency
-	// that should be the autoscaling target. Range (0, 1]. Default is 0.7.
-	ContainerConcurrencyTargetFraction float64
-
-	// ContainerConcurrencyTargetDefault is the default target concurrency
-	// for containers without an explicit annotation. Default is 100.
-	ContainerConcurrencyTargetDefault float64
-
-	// RPSTargetDefault is the default target RPS for containers without
-	// an explicit annotation. Default is 200.
-	RPSTargetDefault float64
-
-	// TargetUtilization is the target resource utilization fraction. Default is 0.7.
-	TargetUtilization float64
 }

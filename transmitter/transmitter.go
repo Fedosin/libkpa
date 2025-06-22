@@ -20,8 +20,6 @@ package transmitter
 import (
 	"context"
 	"log"
-
-	"github.com/Fedosin/libkpa/api"
 )
 
 // MetricTransmitter defines the interface for transmitting autoscaler metrics.
@@ -30,13 +28,13 @@ type MetricTransmitter interface {
 	RecordDesiredPods(ctx context.Context, namespace, service string, value int32)
 
 	// RecordStableValue records the stable window metric value.
-	RecordStableValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64)
+	RecordStableValue(ctx context.Context, namespace, service string, metric string, value float64)
 
 	// RecordPanicValue records the panic window metric value.
-	RecordPanicValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64)
+	RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64)
 
 	// RecordTargetValue records the target metric value.
-	RecordTargetValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64)
+	RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64)
 
 	// RecordExcessBurstCapacity records the excess burst capacity.
 	RecordExcessBurstCapacity(ctx context.Context, namespace, service string, value float64)
@@ -66,17 +64,17 @@ func (t *LogTransmitter) RecordDesiredPods(ctx context.Context, namespace, servi
 }
 
 // RecordStableValue logs the stable window metric value.
-func (t *LogTransmitter) RecordStableValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *LogTransmitter) RecordStableValue(ctx context.Context, namespace, service string, metric string, value float64) {
 	t.logger.Printf("metric: stable_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
 // RecordPanicValue logs the panic window metric value.
-func (t *LogTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *LogTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64) {
 	t.logger.Printf("metric: panic_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
 // RecordTargetValue logs the target metric value.
-func (t *LogTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *LogTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64) {
 	t.logger.Printf("metric: target_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
@@ -107,15 +105,15 @@ func (t *NoOpTransmitter) RecordDesiredPods(ctx context.Context, namespace, serv
 }
 
 // RecordStableValue does nothing.
-func (t *NoOpTransmitter) RecordStableValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *NoOpTransmitter) RecordStableValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
 // RecordPanicValue does nothing.
-func (t *NoOpTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *NoOpTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
 // RecordTargetValue does nothing.
-func (t *NoOpTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric api.ScalingMetric, value float64) {
+func (t *NoOpTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
 // RecordExcessBurstCapacity does nothing.
