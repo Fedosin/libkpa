@@ -397,6 +397,26 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	}
 }
 
+func TestSlidingWindowAutoscaler_Scale_ScaleToZeroDisabled(t *testing.T) {
+	config := defaultConfig()
+	config.EnableScaleToZero = false
+
+	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	now := time.Now()
+
+	snapshot := &mockMetricSnapshot{
+		stableValue:   0,
+		panicValue:    0,
+		readyPodCount: 1,
+		timestamp:     now,
+	}
+
+	recommendation := autoscaler.Scale(snapshot, now)
+	if recommendation.DesiredPodCount != 1 {
+		t.Errorf("expected 1 pod (scale-to-zero disabled), got %d", recommendation.DesiredPodCount)
+	}
+}
+
 func TestSlidingWindowAutoscaler_Scale_NotReachable(t *testing.T) {
 	config := defaultConfig()
 	config.Reachable = false

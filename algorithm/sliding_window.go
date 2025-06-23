@@ -179,6 +179,11 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		desiredPodCount = a.config.MaxScale
 	}
 
+	// If scale-to-zero is disabled, we need to ensure that the desired pod count is at least 1.
+	if !a.config.EnableScaleToZero && desiredPodCount == 0 {
+		desiredPodCount = 1
+	}
+
 	// Calculate excess burst capacity
 	excessBurstCapacity := calculateExcessBurstCapacity(
 		snapshot.ReadyPodCount(),
