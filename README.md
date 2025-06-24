@@ -13,7 +13,7 @@ This library extracts the battle-tested autoscaling algorithms from Knative Serv
 - **Panic mode** for handling traffic spikes
 - **Configurable scale-up/down rates** to prevent flapping
 - **Scale-to-zero capabilities** with grace periods
-- **Support for multiple metrics** (concurrency and RPS)
+- **Support for multiple metrics**
 - **Burst capacity calculations** for traffic absorption
 
 ## Installation
@@ -93,9 +93,7 @@ When load exceeds a configurable threshold, the autoscaler enters "panic mode" w
 Configure minimum/maximum pod counts and control how fast the autoscaler can scale up or down to prevent resource thrashing.
 
 ### Multiple Metrics Support
-Scale based on either:
-- **Concurrency**: Number of concurrent requests per pod
-- **RPS**: Requests per second per pod
+Scale based on arbitrary number of metrics from different sources.
 
 ### Scale-to-Zero
 Optionally scale deployments to zero pods when idle, with configurable grace periods before shutdown.
@@ -108,7 +106,6 @@ See the [examples/](examples/) directory for a complete example of integrating l
 
 The library can be configured through environment variables (with `AUTOSCALER_` prefix) or programmatically. Key settings include:
 
-- `AUTOSCALER_SCALING_METRIC`: Choose between "concurrency" or "rps"
 - `AUTOSCALER_TARGET_VALUE`: Target metric value per pod
 - `AUTOSCALER_STABLE_WINDOW`: Time window for metric averaging (default: 60s)
 - `AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE`: When to enter panic mode (default: 200%)

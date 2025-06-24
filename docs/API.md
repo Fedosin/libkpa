@@ -27,17 +27,14 @@ type AutoscalerConfig struct {
 }
 ```
 
-### PodMetrics
+### Metrics
 
-Represents metrics collected from a single pod:
+Represents collected metrics:
 
 ```go
-type PodMetrics struct {
-    PodName            string
-    Timestamp          time.Time
-    ConcurrentRequests float64
-    RequestsPerSecond  float64
-    ProcessUptime      time.Duration
+type Metrics struct {
+    Timestamp time.Time
+    Value     float64
 }
 ```
 

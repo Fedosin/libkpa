@@ -17,7 +17,7 @@ The sliding window algorithm is the core of libkpa's autoscaling logic. It aggre
 
 ### How It Works
 
-1. **Metric Collection**: Metrics are collected from all pods. The library supports both concurrency (concurrent requests) and RPS (requests per second) metrics. The choice of metric is determined by which values you record in the metric windows, not by configuration.
+1. **Metric Collection**: Metrics are collected from all pods.
 2. **Time Bucketing**: Metrics are stored in time-based buckets (typically 1-second granularity)
 3. **Window Aggregation**: Two windows are maintained:
    - **Stable Window**: Long-term average (default 60s)
