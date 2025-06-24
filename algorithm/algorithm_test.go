@@ -51,7 +51,6 @@ func defaultConfig() api.AutoscalerConfig {
 		MinScale:              0,
 		MaxScale:              0,
 		ActivationScale:       1,
-		EnableScaleToZero:     true,
 		Reachable:             true,
 	}
 }
@@ -378,7 +377,6 @@ func TestSlidingWindowAutoscaler_Update(t *testing.T) {
 func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	config := defaultConfig()
 	config.MinScale = 0
-	config.EnableScaleToZero = true
 
 	autoscaler := NewSlidingWindowAutoscaler(config, 1)
 	now := time.Now()
@@ -394,26 +392,6 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	recommendation := autoscaler.Scale(snapshot, now)
 	if recommendation.DesiredPodCount != 0 {
 		t.Errorf("expected to scale to 0, got %d", recommendation.DesiredPodCount)
-	}
-}
-
-func TestSlidingWindowAutoscaler_Scale_ScaleToZeroDisabled(t *testing.T) {
-	config := defaultConfig()
-	config.EnableScaleToZero = false
-
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
-	now := time.Now()
-
-	snapshot := &mockMetricSnapshot{
-		stableValue:   0,
-		panicValue:    0,
-		readyPodCount: 1,
-		timestamp:     now,
-	}
-
-	recommendation := autoscaler.Scale(snapshot, now)
-	if recommendation.DesiredPodCount != 1 {
-		t.Errorf("expected 1 pod (scale-to-zero disabled), got %d", recommendation.DesiredPodCount)
 	}
 }
 

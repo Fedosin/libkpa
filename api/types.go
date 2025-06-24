@@ -75,9 +75,6 @@ type AutoscalerConfig struct {
 	// Must be >= 1. Default is 1.
 	ActivationScale int32
 
-	// EnableScaleToZero enables scaling to zero pods. Default is true.
-	EnableScaleToZero bool
-
 	// ScaleToZeroGracePeriod is the time to wait before scaling to zero
 	// after the service becomes idle. Default is 30s.
 	ScaleToZeroGracePeriod time.Duration

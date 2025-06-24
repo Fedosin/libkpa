@@ -22,7 +22,6 @@ type AutoscalerConfig struct {
     MinScale               int32         // Minimum pod count
     MaxScale               int32         // Maximum pod count (0 = unlimited)
     ActivationScale        int32         // Minimum scale when activating from zero
-    EnableScaleToZero      bool          // Enable scaling to zero pods
     ScaleToZeroGracePeriod time.Duration // Grace period before scaling to zero
     Reachable              bool          // Whether service is reachable (deprecated)
 }
@@ -106,21 +105,20 @@ type MetricAggregator interface {
 ```go
 // Define autoscaler configuration
 spec := api.AutoscalerConfig{
-    MaxScaleUpRate:        10.0,
-    MaxScaleDownRate:      2.0,
-    TargetValue:           100.0,
-    TotalValue:            1000.0,
-    TargetBurstCapacity:   200.0,
-    PanicThreshold:        2.0,
-    PanicWindowPercentage: 10.0,
-    StableWindow:          60 * time.Second,
-    ScaleDownDelay:        0,
-    MinScale:              0,
-    MaxScale:              10,
-    ActivationScale:       1,
-    EnableScaleToZero:     true,
+    MaxScaleUpRate:         10.0,
+    MaxScaleDownRate:       2.0,
+    TargetValue:            100.0,
+    TotalValue:             1000.0,
+    TargetBurstCapacity:    200.0,
+    PanicThreshold:         2.0,
+    PanicWindowPercentage:  10.0,
+    StableWindow:           60 * time.Second,
+    ScaleDownDelay:         0,
+    MinScale:               0,
+    MaxScale:               10,
+    ActivationScale:        1,
     ScaleToZeroGracePeriod: 30 * time.Second,
-    Reachable:             true,
+    Reachable:              true,
 }
 
 // Create the autoscaler

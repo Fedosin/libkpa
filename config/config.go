@@ -32,18 +32,18 @@ const (
 	EnvPrefix = "AUTOSCALER_"
 
 	// Default values
-	defaultMaxScaleUpRate                     = 1000.0
-	defaultMaxScaleDownRate                   = 2.0
-	defaultTargetBurstCapacity                = 211.0
-	defaultPanicWindowPercentage              = 10.0
-	defaultPanicThresholdPercentage           = 200.0
-	defaultStableWindow                       = 60 * time.Second
-	defaultScaleToZeroGracePeriod             = 30 * time.Second
-	defaultScaleDownDelay                     = 0 * time.Second
-	defaultInitialScale                       = int32(1)
-	defaultMinScale                           = int32(0)
-	defaultMaxScale                           = int32(0)
-	defaultActivationScale                    = int32(1)
+	defaultMaxScaleUpRate           = 1000.0
+	defaultMaxScaleDownRate         = 2.0
+	defaultTargetBurstCapacity      = 211.0
+	defaultPanicWindowPercentage    = 10.0
+	defaultPanicThresholdPercentage = 200.0
+	defaultStableWindow             = 60 * time.Second
+	defaultScaleToZeroGracePeriod   = 30 * time.Second
+	defaultScaleDownDelay           = 0 * time.Second
+	defaultInitialScale             = int32(1)
+	defaultMinScale                 = int32(0)
+	defaultMaxScale                 = int32(0)
+	defaultActivationScale          = int32(1)
 
 	// Validation constraints
 	minStableWindow = 5 * time.Second
@@ -82,9 +82,6 @@ func (ce *configErrors) Error() string {
 // Load creates a Config from environment variables and validates it.
 func Load() (*api.AutoscalerConfig, error) {
 	errs := &configErrors{}
-
-	enableScaleToZero, err := getEnvBool("ENABLE_SCALE_TO_ZERO", true)
-	errs.add(err)
 
 	scaleToZeroGracePeriod, err := getEnvDuration("SCALE_TO_ZERO_GRACE_PERIOD", defaultScaleToZeroGracePeriod)
 	errs.add(err)
@@ -130,20 +127,19 @@ func Load() (*api.AutoscalerConfig, error) {
 	}
 
 	cfg := &api.AutoscalerConfig{
-		EnableScaleToZero:                  enableScaleToZero,
-		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
-		MaxScaleUpRate:        maxScaleUpRate,
-		MaxScaleDownRate:      maxScaleDownRate,
-		TargetValue:           targetValue,
-		TotalValue:            totalValue,
-		TargetBurstCapacity:   targetBurstCapacity,
-		PanicThreshold:        panicThreshold,
-		PanicWindowPercentage: panicWindowPercentage,
-		StableWindow:          stableWindow,
-		ScaleDownDelay:        scaleDownDelay,
-		MinScale:              minScale,
-		MaxScale:              maxScale,
-		ActivationScale:       activationScale,
+		ScaleToZeroGracePeriod: scaleToZeroGracePeriod,
+		MaxScaleUpRate:         maxScaleUpRate,
+		MaxScaleDownRate:       maxScaleDownRate,
+		TargetValue:            targetValue,
+		TotalValue:             totalValue,
+		TargetBurstCapacity:    targetBurstCapacity,
+		PanicThreshold:         panicThreshold,
+		PanicWindowPercentage:  panicWindowPercentage,
+		StableWindow:           stableWindow,
+		ScaleDownDelay:         scaleDownDelay,
+		MinScale:               minScale,
+		MaxScale:               maxScale,
+		ActivationScale:        activationScale,
 	}
 
 	// Adjust percentage to fraction if needed
@@ -158,9 +154,6 @@ func Load() (*api.AutoscalerConfig, error) {
 // LoadFromMap creates a Config from a map of string values.
 func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	errs := &configErrors{}
-
-	enableScaleToZero, err := parseBool(data["enable-scale-to-zero"], true)
-	errs.add(err)
 
 	scaleToZeroGracePeriod, err := parseDuration(data["scale-to-zero-grace-period"], defaultScaleToZeroGracePeriod)
 	errs.add(err)
@@ -206,20 +199,19 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	}
 
 	cfg := &api.AutoscalerConfig{
-		EnableScaleToZero:                  enableScaleToZero,
-		ScaleToZeroGracePeriod:             scaleToZeroGracePeriod,
-		MaxScaleUpRate:        maxScaleUpRate,
-		MaxScaleDownRate:      maxScaleDownRate,
-		TargetValue:           targetValue,
-		TotalValue:            totalValue,
-		TargetBurstCapacity:   targetBurstCapacity,
-		PanicThreshold:        panicThreshold,
-		PanicWindowPercentage: panicWindowPercentage,
-		StableWindow:          stableWindow,
-		ScaleDownDelay:        scaleDownDelay,
-		MinScale:              minScale,
-		MaxScale:              maxScale,
-		ActivationScale:       activationScale,
+		ScaleToZeroGracePeriod: scaleToZeroGracePeriod,
+		MaxScaleUpRate:         maxScaleUpRate,
+		MaxScaleDownRate:       maxScaleDownRate,
+		TargetValue:            targetValue,
+		TotalValue:             totalValue,
+		TargetBurstCapacity:    targetBurstCapacity,
+		PanicThreshold:         panicThreshold,
+		PanicWindowPercentage:  panicWindowPercentage,
+		StableWindow:           stableWindow,
+		ScaleDownDelay:         scaleDownDelay,
+		MinScale:               minScale,
+		MaxScale:               maxScale,
+		ActivationScale:        activationScale,
 	}
 
 	// Adjust percentage to fraction if needed
@@ -313,18 +305,6 @@ func getEnvString(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvBool(key string, defaultValue bool) (bool, error) {
-	value := os.Getenv(EnvPrefix + key)
-	if value == "" {
-		return defaultValue, nil
-	}
-	b, err := strconv.ParseBool(value)
-	if err != nil {
-		return defaultValue, fmt.Errorf("invalid boolean value for %s%s: %q", EnvPrefix, key, value)
-	}
-	return b, nil
-}
-
 func getEnvFloat(key string, defaultValue float64) (float64, error) {
 	value := os.Getenv(EnvPrefix + key)
 	if value == "" {
@@ -367,17 +347,6 @@ func parseString(value, defaultValue string) string {
 		return value
 	}
 	return defaultValue
-}
-
-func parseBool(value string, defaultValue bool) (bool, error) {
-	if value == "" {
-		return defaultValue, nil
-	}
-	b, err := strconv.ParseBool(value)
-	if err != nil {
-		return defaultValue, fmt.Errorf("invalid boolean value: %q", value)
-	}
-	return b, nil
 }
 
 func parseFloat(value string, defaultValue float64) (float64, error) {

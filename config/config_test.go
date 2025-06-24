@@ -101,7 +101,6 @@ func TestLoad(t *testing.T) {
 			name:    "default values when no env vars set",
 			envVars: map[string]string{},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      true,
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
@@ -120,7 +119,6 @@ func TestLoad(t *testing.T) {
 		{
 			name: "custom values from env vars",
 			envVars: map[string]string{
-				"AUTOSCALER_ENABLE_SCALE_TO_ZERO":       "false",
 				"AUTOSCALER_SCALE_TO_ZERO_GRACE_PERIOD": "45s",
 				"AUTOSCALER_MAX_SCALE_UP_RATE":          "500.5",
 				"AUTOSCALER_MAX_SCALE_DOWN_RATE":        "3.5",
@@ -136,7 +134,6 @@ func TestLoad(t *testing.T) {
 				"AUTOSCALER_ACTIVATION_SCALE":           "2",
 			},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      false,
 				ScaleToZeroGracePeriod: 45 * time.Second,
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       3.5,
@@ -158,7 +155,6 @@ func TestLoad(t *testing.T) {
 				"AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE": "2.5",
 			},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      true,
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
@@ -173,14 +169,6 @@ func TestLoad(t *testing.T) {
 				MaxScale:               0,
 				ActivationScale:        1,
 			},
-		},
-		{
-			name: "invalid boolean value",
-			envVars: map[string]string{
-				"AUTOSCALER_ENABLE_SCALE_TO_ZERO": "invalid",
-			},
-			wantErr: true,
-			errMsg:  "invalid boolean value",
 		},
 		{
 			name: "invalid float value",
@@ -262,7 +250,6 @@ func TestLoadFromMap(t *testing.T) {
 			name: "default values with empty map",
 			data: map[string]string{},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      true,
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
@@ -281,7 +268,6 @@ func TestLoadFromMap(t *testing.T) {
 		{
 			name: "custom values from map",
 			data: map[string]string{
-				"enable-scale-to-zero":       "false",
 				"scale-to-zero-grace-period": "45s",
 				"max-scale-up-rate":          "500.5",
 				"max-scale-down-rate":        "3.5",
@@ -297,7 +283,6 @@ func TestLoadFromMap(t *testing.T) {
 				"activation-scale":           "2",
 			},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      false,
 				ScaleToZeroGracePeriod: 45 * time.Second,
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       3.5,
@@ -321,7 +306,6 @@ func TestLoadFromMap(t *testing.T) {
 				"stable-window":     " 30s ",
 			},
 			want: &api.AutoscalerConfig{
-				EnableScaleToZero:      true,
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       2.0,
@@ -336,14 +320,6 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScale:               0,
 				ActivationScale:        1,
 			},
-		},
-		{
-			name: "invalid boolean",
-			data: map[string]string{
-				"enable-scale-to-zero": "yes",
-			},
-			wantErr: true,
-			errMsg:  "invalid boolean value",
 		},
 		{
 			name: "invalid float",
@@ -408,7 +384,6 @@ func TestValidate(t *testing.T) {
 		{
 			name: "valid config",
 			config: &api.AutoscalerConfig{
-				EnableScaleToZero:      true,
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
@@ -802,8 +777,7 @@ func configsEqual(a, b *api.AutoscalerConfig) bool {
 		return a == b
 	}
 
-	return a.EnableScaleToZero == b.EnableScaleToZero &&
-		a.ScaleToZeroGracePeriod == b.ScaleToZeroGracePeriod &&
+	return a.ScaleToZeroGracePeriod == b.ScaleToZeroGracePeriod &&
 		a.MaxScaleUpRate == b.MaxScaleUpRate &&
 		a.MaxScaleDownRate == b.MaxScaleDownRate &&
 		a.TargetValue == b.TargetValue &&

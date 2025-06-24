@@ -44,12 +44,6 @@ All environment variables use the `AUTOSCALER_` prefix.
 |---------------------|------|---------|-------------|-------------|
 | `AUTOSCALER_TARGET_BURST_CAPACITY` | float | `211.0` | Target burst capacity (-1 = unlimited) | >= -1 |
 
-### Feature Flags
-
-| Environment Variable | Type | Default | Description |
-|---------------------|------|---------|-------------|
-| `AUTOSCALER_ENABLE_SCALE_TO_ZERO` | bool | `true` | Enable scaling to zero pods |
-
 ## Configuration Map Format
 
 When using `config.LoadFromMap()`, use the following keys:
@@ -69,7 +63,6 @@ configMap := map[string]string{
     "max-scale":                                 "10",
     "activation-scale":                          "1",
     "target-burst-capacity":                     "211",
-    "enable-scale-to-zero":                      "true",
 }
 
 config, err := config.LoadFromMap(configMap)
@@ -97,7 +90,6 @@ For services that process batch jobs:
 export AUTOSCALER_TARGET_VALUE=1
 export AUTOSCALER_STABLE_WINDOW=300s
 export AUTOSCALER_SCALE_DOWN_DELAY=60s
-export AUTOSCALER_ENABLE_SCALE_TO_ZERO=true
 export AUTOSCALER_SCALE_TO_ZERO_GRACE_PERIOD=300s
 ```
 
