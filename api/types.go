@@ -85,22 +85,13 @@ type AutoscalerConfig struct {
 	Reachable bool
 }
 
-// PodMetrics represents metrics collected from a single pod.
-type PodMetrics struct {
-	// PodName is the name of the pod.
-	PodName string
-
+// Metrics represents collected metrics.
+type Metrics struct {
 	// Timestamp is when these metrics were collected.
 	Timestamp time.Time
 
-	// ConcurrentRequests is the number of in-flight requests.
-	ConcurrentRequests float64
-
-	// RequestsPerSecond is the rate of requests.
-	RequestsPerSecond float64
-
-	// ProcessUptime is how long the pod has been running.
-	ProcessUptime time.Duration
+	// Value is the metric value.
+	Value float64
 }
 
 // ScaleRecommendation represents the autoscaler's scaling recommendation.

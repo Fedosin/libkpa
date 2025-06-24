@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	scalingMetric = "rps"
+	scalingMetric = "concurrency"
 )
 
 // MockMetricCollector simulates collecting metrics from pods
@@ -40,29 +40,20 @@ type MockMetricCollector struct {
 	baseLoad float64
 }
 
-func (m *MockMetricCollector) CollectMetrics() []api.PodMetrics {
+func (m *MockMetricCollector) CollectMetrics() []api.Metrics {
 	// Simulate 3 pods with varying load
-	pods := []api.PodMetrics{
+	pods := []api.Metrics{
 		{
-			PodName:            "app-pod-1",
-			Timestamp:          time.Now(),
-			ConcurrentRequests: m.baseLoad + rand.Float64()*20,
-			RequestsPerSecond:  (m.baseLoad + rand.Float64()*20) * 2,
-			ProcessUptime:      5 * time.Minute,
+			Timestamp: time.Now(),
+			Value:     m.baseLoad + rand.Float64()*20,
 		},
 		{
-			PodName:            "app-pod-2",
-			Timestamp:          time.Now(),
-			ConcurrentRequests: m.baseLoad + rand.Float64()*20,
-			RequestsPerSecond:  (m.baseLoad + rand.Float64()*20) * 2,
-			ProcessUptime:      5 * time.Minute,
+			Timestamp: time.Now(),
+			Value:     m.baseLoad + rand.Float64()*20,
 		},
 		{
-			PodName:            "app-pod-3",
-			Timestamp:          time.Now(),
-			ConcurrentRequests: m.baseLoad + rand.Float64()*20,
-			RequestsPerSecond:  (m.baseLoad + rand.Float64()*20) * 2,
-			ProcessUptime:      5 * time.Minute,
+			Timestamp: time.Now(),
+			Value:     m.baseLoad + rand.Float64()*20,
 		},
 	}
 	return pods
@@ -160,10 +151,8 @@ func main() {
 
 			// Calculate total load
 			totalConcurrency := 0.0
-			totalRPS := 0.0
 			for _, pm := range podMetrics {
-				totalConcurrency += pm.ConcurrentRequests
-				totalRPS += pm.RequestsPerSecond
+				totalConcurrency += pm.Value
 			}
 
 			// Record in windows

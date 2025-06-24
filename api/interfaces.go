@@ -64,10 +64,10 @@ type PodCounter interface {
 // MetricCollector collects metrics from pods.
 type MetricCollector interface {
 	// CollectMetrics collects metrics from all pods.
-	CollectMetrics(ctx context.Context, pods []string) ([]PodMetrics, error)
+	CollectMetrics(ctx context.Context) ([]Metrics, error)
 
 	// CreateSnapshot creates a metric snapshot from collected pod metrics.
-	CreateSnapshot(metrics []PodMetrics, now time.Time) MetricSnapshot
+	CreateSnapshot(metrics []Metrics, now time.Time) MetricSnapshot
 }
 
 // MetricAggregator aggregates metrics over time windows.
