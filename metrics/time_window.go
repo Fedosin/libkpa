@@ -24,69 +24,49 @@ import (
 	"time"
 )
 
-type (
-	// TimeWindow keeps buckets that have been collected at a certain time.
-	TimeWindow struct {
-		bucketsMutex sync.RWMutex
-		// buckets is a ring buffer indexed by timeToIndex() % len(buckets).
-		// Each element represents a certain granularity of time, and the total
-		// represented duration adds up to a window length of time.
-		buckets []float64
-
-		// firstWrite holds the time when the first write has been made.
-		// This time is reset to `now` when the very first write happens,
-		// or when a first write happens after `window` time of inactivity.
-		// The difference between `now` and `firstWrite` is used to compute
-		// the number of eligible buckets for computation of average values.
-		firstWrite time.Time
-
-		// lastWrite stores the time when the last write was made.
-		// This is used to detect when we have gaps in the data (i.e. more than a
-		// granularity has expired since the last write) so that we can zero those
-		// entries in the buckets array. It is also used when calculating the
-		// WindowAverage to know how much of the buckets array represents valid data.
-		lastWrite time.Time
-
-		// granularity is the duration represented by each bucket in the buckets ring buffer.
-		granularity time.Duration
-		// window is the total time represented by the buckets ring buffer.
-		window time.Duration
-		// The total sum of all buckets within the window. This total includes
-		// invalid buckets, e.g. buckets written to before firstTime or after
-		// lastTime are included in this total.
-		windowTotal float64
-	}
-
-	// WeightedTimeWindow is the implementation of buckets, that
-	// uses weighted average algorithm.
-	WeightedTimeWindow struct {
-		*TimeWindow
-
-		// smoothingCoeff contains the speed with which the importance
-		// of items in the past decays. The larger the faster weights decay.
-		// It is autocomputed from window size and weightPrecision constant
-		// and is bounded by minExponent below.
-		smoothingCoeff float64
-	}
+const (
+	// minExponent is the minimal decay multiplier for the weighted average computations.
+	minExponent = 0.2
+	// The sum of weights for weighted average should be at least this much.
+	weightPrecision = 0.9999
+	precision       = 6
 )
+
+// TimeWindow keeps buckets that have been collected at a certain time.
+type TimeWindow struct {
+	bucketsMutex sync.RWMutex
+	// buckets is a ring buffer indexed by timeToIndex() % len(buckets).
+	// Each element represents a certain granularity of time, and the total
+	// represented duration adds up to a window length of time.
+	buckets []float64
+
+	// firstWrite holds the time when the first write has been made.
+	// This time is reset to `now` when the very first write happens,
+	// or when a first write happens after `window` time of inactivity.
+	// The difference between `now` and `firstWrite` is used to compute
+	// the number of eligible buckets for computation of average values.
+	firstWrite time.Time
+
+	// lastWrite stores the time when the last write was made.
+	// This is used to detect when we have gaps in the data (i.e. more than a
+	// granularity has expired since the last write) so that we can zero those
+	// entries in the buckets array. It is also used when calculating the
+	// WindowAverage to know how much of the buckets array represents valid data.
+	lastWrite time.Time
+
+	// granularity is the duration represented by each bucket in the buckets ring buffer.
+	granularity time.Duration
+	// window is the total time represented by the buckets ring buffer.
+	window time.Duration
+	// The total sum of all buckets within the window. This total includes
+	// invalid buckets, e.g. buckets written to before firstTime or after
+	// lastTime are included in this total.
+	windowTotal float64
+}
 
 // String implements the Stringer interface.
 func (t *TimeWindow) String() string {
 	return fmt.Sprintf("%v", t.buckets)
-}
-
-// computeSmoothingCoeff computes the decay given number of buckets.
-// The function uses precision and min exponent value constants.
-func computeSmoothingCoeff(nb float64) float64 {
-	return math.Max(
-		// Given number of buckets, infer the desired multiplier
-		// so that at least weightPrecision sum of buckets is met.
-		1-math.Pow(1-weightPrecision, 1/nb),
-		// If it's smaller than minExponent — then use minExponent,
-		// otherwise with extremely large windows we basically end up
-		// very close to the simple average.
-		minExponent,
-	)
 }
 
 // NewTimeWindow generates a new TimeWindow with the given
@@ -109,18 +89,6 @@ func NewTimeWindow(window, granularity time.Duration) *TimeWindow {
 	}
 }
 
-// NewWeightedTimeWindow generates a new WeightedTimeWindow with the given
-// granularity.
-func NewWeightedTimeWindow(window, granularity time.Duration) *WeightedTimeWindow {
-	// Number of buckets is `window` divided by `granularity`, rounded up.
-	// e.g. 60s / 2s = 30.
-	nb := math.Ceil(float64(window) / float64(granularity))
-	return &WeightedTimeWindow{
-		TimeWindow:     NewTimeWindow(window, granularity),
-		smoothingCoeff: computeSmoothingCoeff(nb),
-	}
-}
-
 // IsEmpty returns true if no data has been recorded for the `window` period.
 func (t *TimeWindow) IsEmpty(now time.Time) bool {
 	now = now.Truncate(t.granularity)
@@ -132,62 +100,6 @@ func (t *TimeWindow) IsEmpty(now time.Time) bool {
 // isEmptyLocked expects `now` to be truncated and at least Read Lock held.
 func (t *TimeWindow) isEmptyLocked(now time.Time) bool {
 	return now.Sub(t.lastWrite) > t.window
-}
-
-// roundToNDigits rounds a float64 to n decimal places.
-func roundToNDigits(n int, f float64) float64 {
-	p := math.Pow10(n)
-	return math.Round(f*p) / p
-}
-
-const (
-	// minExponent is the minimal decay multiplier for the weighted average computations.
-	minExponent = 0.2
-	// The sum of weights for weighted average should be at least this much.
-	weightPrecision = 0.9999
-	precision       = 6
-)
-
-// WindowAverage returns the exponential weighted average. This means
-// that more recent items have much greater impact on the average than
-// the older ones.
-// TODO(vagababov): optimize for O(1) computation, if possible.
-// E.g. with data  [10, 10, 5, 5] (newest last), then
-// the `WindowAverage` would return (10+10+5+5)/4 = 7.5
-// This with exponent of 0.6 would return 5*0.6+5*0.6*0.4+10*0.6*0.4^2+10*0.6*0.4^3 = 5.544
-// If we reverse the data to [5, 5, 10, 10] the simple average would remain the same,
-// but this one would change to 9.072.
-func (t *WeightedTimeWindow) WindowAverage(now time.Time) float64 {
-	now = now.Truncate(t.granularity)
-	t.bucketsMutex.RLock()
-	defer t.bucketsMutex.RUnlock()
-	if t.isEmptyLocked(now) {
-		return 0
-	}
-
-	totalB := len(t.buckets)
-	numB := len(t.buckets)
-
-	multiplier := t.smoothingCoeff
-	// We start with 0es. But we know that we have _some_ data because
-	// IsEmpty returned false.
-	if now.After(t.lastWrite) {
-		numZ := now.Sub(t.lastWrite) / t.granularity
-		// Skip to this multiplier directly: m*(1-m)^(nz-1).
-		multiplier *= math.Pow(1-t.smoothingCoeff, float64(numZ))
-		// Reduce effective number of buckets.
-		numB -= int(numZ)
-	}
-	startIdx := t.timeToIndex(t.lastWrite) + totalB // To ensure always positive % operation.
-	ret := 0.
-	for i := range numB {
-		effectiveIdx := (startIdx - i) % totalB
-		v := t.buckets[effectiveIdx] * multiplier
-		ret += v
-		multiplier *= (1 - t.smoothingCoeff)
-		// TODO(vagababov): bail out if sm > weightPrecision?
-	}
-	return ret
 }
 
 // WindowAverage returns the average bucket value over the window.
@@ -302,12 +214,6 @@ func (t *TimeWindow) Record(now time.Time, value float64) {
 	t.windowTotal += value
 }
 
-// ResizeWindow implements window resizing for the weighted averaging buckets object.
-func (t *WeightedTimeWindow) ResizeWindow(w time.Duration) {
-	t.TimeWindow.ResizeWindow(w)
-	t.smoothingCoeff = computeSmoothingCoeff(math.Ceil(float64(w) / float64(t.granularity)))
-}
-
 // ResizeWindow resizes the window. This is an O(N) operation,
 // and is not supposed to be executed very often.
 func (t *TimeWindow) ResizeWindow(w time.Duration) {
@@ -357,40 +263,22 @@ func (t *TimeWindow) ResizeWindow(w time.Duration) {
 	t.windowTotal = newTotal
 }
 
-// MetricSnapshot represents a point-in-time view of metrics.
-type MetricSnapshot struct {
-	stableValue   float64
-	panicValue    float64
-	readyPodCount int32
-	timestamp     time.Time
+// roundToNDigits rounds a float64 to n decimal places.
+func roundToNDigits(n int, f float64) float64 {
+	p := math.Pow10(n)
+	return math.Round(f*p) / p
 }
 
-// NewMetricSnapshot creates a new metric snapshot.
-func NewMetricSnapshot(stableValue, panicValue float64, readyPods int32, timestamp time.Time) *MetricSnapshot {
-	return &MetricSnapshot{
-		stableValue:   stableValue,
-		panicValue:    panicValue,
-		readyPodCount: readyPods,
-		timestamp:     timestamp,
-	}
-}
-
-// StableValue returns the metric value averaged over the stable window.
-func (s *MetricSnapshot) StableValue() float64 {
-	return s.stableValue
-}
-
-// PanicValue returns the metric value averaged over the panic window.
-func (s *MetricSnapshot) PanicValue() float64 {
-	return s.panicValue
-}
-
-// ReadyPodCount returns the number of ready pods.
-func (s *MetricSnapshot) ReadyPodCount() int32 {
-	return s.readyPodCount
-}
-
-// Timestamp returns when this snapshot was taken.
-func (s *MetricSnapshot) Timestamp() time.Time {
-	return s.timestamp
+// computeSmoothingCoeff computes the decay given number of buckets.
+// The function uses precision and min exponent value constants.
+func computeSmoothingCoeff(nb float64) float64 {
+	return math.Max(
+		// Given number of buckets, infer the desired multiplier
+		// so that at least weightPrecision sum of buckets is met.
+		1-math.Pow(1-weightPrecision, 1/nb),
+		// If it's smaller than minExponent — then use minExponent,
+		// otherwise with extremely large windows we basically end up
+		// very close to the simple average.
+		minExponent,
+	)
 }
