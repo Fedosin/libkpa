@@ -60,27 +60,8 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 	tests := []struct {
 		name         string
 		config       api.AutoscalerConfig
-		initialScale int32
 		wantPanic    bool
 	}{
-		{
-			name:         "initial scale 0",
-			config:       defaultConfig(),
-			initialScale: 0,
-			wantPanic:    false,
-		},
-		{
-			name:         "initial scale 1",
-			config:       defaultConfig(),
-			initialScale: 1,
-			wantPanic:    false,
-		},
-		{
-			name:         "initial scale > 1 starts in panic mode",
-			config:       defaultConfig(),
-			initialScale: 5,
-			wantPanic:    true,
-		},
 		{
 			name: "with scale down delay",
 			config: func() api.AutoscalerConfig {
@@ -88,32 +69,22 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 				c.ScaleDownDelay = 10 * time.Second
 				return c
 			}(),
-			initialScale: 1,
 			wantPanic:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			autoscaler := NewSlidingWindowAutoscaler(tt.config, tt.initialScale)
+			autoscaler := NewSlidingWindowAutoscaler(tt.config)
 			if autoscaler == nil {
 				t.Fatal("expected non-nil autoscaler")
-			}
-			if tt.wantPanic && autoscaler.panicTime.IsZero() {
-				t.Error("expected to start in panic mode")
-			}
-			if !tt.wantPanic && !autoscaler.panicTime.IsZero() {
-				t.Error("expected not to start in panic mode")
-			}
-			if tt.wantPanic && autoscaler.maxPanicPods != tt.initialScale {
-				t.Errorf("expected maxPanicPods=%d, got %d", tt.initialScale, autoscaler.maxPanicPods)
 			}
 		})
 	}
 }
 
 func TestSlidingWindowAutoscaler_Scale_NoData(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig(), 1)
+	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
 	now := time.Now()
 
 	// Test with negative stable value
@@ -149,7 +120,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		config            api.AutoscalerConfig
 		snapshot          mockMetricSnapshot
 		expectedPodCount  int32
-		expectedPanicMode bool
 		expectedEBC       int32 // excess burst capacity
 	}{
 		{
@@ -161,7 +131,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 2, // start with 2 pods instead of 1
 			},
 			expectedPodCount:  3, // ceil(250/100)
-			expectedPanicMode: false,
 			expectedEBC:       1539, // floor(2*1000 - 211 - 250)
 		},
 		{
@@ -173,7 +142,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 5,
 			},
 			expectedPodCount:  2, // limited by max scale down rate (5/2.0)
-			expectedPanicMode: false,
 			expectedEBC:       4739, // floor(5*1000 - 211 - 50)
 		},
 		{
@@ -189,7 +157,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 5,
 			},
 			expectedPodCount:  3, // min scale
-			expectedPanicMode: false,
 		},
 		{
 			name: "respect max scale",
@@ -204,7 +171,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 5,
 			},
 			expectedPodCount:  8, // not limited by max scale yet
-			expectedPanicMode: false,
 		},
 		{
 			name: "activation scale",
@@ -219,7 +185,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 1,
 			},
 			expectedPodCount:  3, // activation scale
-			expectedPanicMode: false,
 		},
 		{
 			name: "zero target value",
@@ -235,13 +200,12 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 1,
 			},
 			expectedPodCount:  100,  // limited by max scale
-			expectedPanicMode: true, // zero target value triggers panic mode
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			autoscaler := NewSlidingWindowAutoscaler(tt.config, 1)
+			autoscaler := NewSlidingWindowAutoscaler(tt.config)
 			now := time.Now()
 			tt.snapshot.timestamp = now
 
@@ -252,9 +216,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}
 			if recommendation.DesiredPodCount != tt.expectedPodCount {
 				t.Errorf("expected pod count %d, got %d", tt.expectedPodCount, recommendation.DesiredPodCount)
-			}
-			if recommendation.InPanicMode != tt.expectedPanicMode {
-				t.Errorf("expected panic mode %v, got %v", tt.expectedPanicMode, recommendation.InPanicMode)
 			}
 			if tt.expectedEBC != 0 && (tt.name == "scale up based on stable value" || tt.name == "scale down based on stable value") {
 				if recommendation.ExcessBurstCapacity != tt.expectedEBC {
@@ -267,7 +228,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 
 func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
 	config := defaultConfig()
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	autoscaler := NewSlidingWindowAutoscaler(config)
 	now := time.Now()
 
 	// Test entering panic mode
@@ -319,7 +280,7 @@ func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
 	config.MaxScaleUpRate = 2.0   // Can double
 	config.MaxScaleDownRate = 2.0 // Can halve
 
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	autoscaler := NewSlidingWindowAutoscaler(config)
 	now := time.Now()
 
 	// Test scale up rate limit
@@ -350,7 +311,7 @@ func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Update(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig(), 1)
+	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
 
 	newConfig := defaultConfig()
 	newConfig.TargetValue = 200
@@ -378,7 +339,7 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	config := defaultConfig()
 	config.MinScale = 0
 
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	autoscaler := NewSlidingWindowAutoscaler(config)
 	now := time.Now()
 
 	// Test scaling to zero with no load
@@ -399,7 +360,7 @@ func TestSlidingWindowAutoscaler_Scale_NotReachable(t *testing.T) {
 	config := defaultConfig()
 	config.Reachable = false
 
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	autoscaler := NewSlidingWindowAutoscaler(config)
 	now := time.Now()
 
 	// When not reachable, maxScaleDown should be 0
@@ -420,7 +381,7 @@ func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing
 	config := defaultConfig()
 	config.ActivationScale = 3
 
-	autoscaler := NewSlidingWindowAutoscaler(config, 1)
+	autoscaler := NewSlidingWindowAutoscaler(config)
 	now := time.Now()
 
 	// Test that activation scale doesn't apply when metrics are zero
@@ -438,7 +399,7 @@ func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing
 }
 
 func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig(), 1)
+	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
 	now := time.Now()
 
 	// Test with zero ready pods (should default to 1 to avoid division by zero)
