@@ -91,7 +91,7 @@ func main() {
 	// Create metric windows for stable and panic averages
 	stableWindow := metrics.NewTimeWindow(cfg.StableWindow, time.Second)
 	panicWindow := metrics.NewTimeWindow(
-		time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100),
+		max(time.Second, time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100)),
 		time.Second,
 	)
 

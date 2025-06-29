@@ -74,12 +74,14 @@ func main() {
 - **`metrics/`** - Time-windowed metric collection and aggregation
 - **`transmitter/`** - Metric reporting interfaces for monitoring integration
 - **`maxtimewindow/`** - Time window collection and aggregation
+- **`manager/`** - High-level manager for coordinating multiple autoscalers
 
 ## Documentation
 
 - [API Reference](docs/API.md) - Detailed API types and interfaces documentation
 - [Configuration Guide](docs/CONFIGURATION.md) - All configuration options and environment variables
 - [Algorithms Explained](docs/ALGORITHMS.md) - Deep dive into the autoscaling algorithms
+- [Scaling Manager](docs/MANAGER.md) - Guide to managing multiple autoscalers and metrics
 
 ## Features
 
