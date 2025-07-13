@@ -23,23 +23,22 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/Fedosin/libkpa/api"
+	libkpaconfig "github.com/Fedosin/libkpa/config"
 	"github.com/Fedosin/libkpa/manager"
 )
 
 func main() {
 	// Configure autoscaler settings
-	config := api.AutoscalerConfig{
-		StableWindow:          6 * time.Second, // 6 seconds to consider a stable window
-		PanicWindowPercentage: 40.0,
-		TargetValue:           280.0,   // Target 280 mCPU per pod
-		PanicThreshold:        2.0,    // Panic at 200% of current capacity
-		MaxScaleUpRate:        1000.0, // Unlimited scale up
-		MaxScaleDownRate:      2.0,    // Max halve pods per iteration
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 6 * time.Second
+	config.PanicWindowPercentage = 40.0
+	config.TargetValue = 280.0
+	config.PanicThreshold = 2.0
+	config.MaxScaleUpRate = 1000.0
+	config.MaxScaleDownRate = 2.0
 
 	// Create scalers for different metrics
-	cpuScaler, err := manager.NewScaler("cpu", config, "linear")
+	cpuScaler, err := manager.NewScaler("cpu", *config, "linear")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,7 +46,7 @@ func main() {
 	// Memory scaler with weighted algorithm for faster response
 	memConfig := config
 	memConfig.TargetValue = 270.0 // Target 270 Mb memory per pod
-	memoryScaler, err := manager.NewScaler("memory", memConfig, "weighted")
+	memoryScaler, err := manager.NewScaler("memory", *memConfig, "weighted")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func main() {
 	// Request rate scaler
 	reqConfig := config
 	reqConfig.TargetValue = 1000.0 // Target 1000 requests/sec per pod
-	requestScaler, err := manager.NewScaler("requests", reqConfig, "weighted")
+	requestScaler, err := manager.NewScaler("requests", *reqConfig, "weighted")
 	if err != nil {
 		log.Fatal(err)
 	}

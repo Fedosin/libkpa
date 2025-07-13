@@ -18,11 +18,13 @@ limitations under the License.
 package algorithm
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
+	libkpaconfig "github.com/Fedosin/libkpa/config"
 	"github.com/Fedosin/libkpa/maxtimewindow"
 )
 
@@ -47,7 +49,11 @@ const (
 )
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
-func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) *SlidingWindowAutoscaler {
+func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) (*SlidingWindowAutoscaler, error) {
+	if err := libkpaconfig.Validate(&config); err != nil {
+		return nil, err
+	}
+
 	var maxTimeWindow *maxtimewindow.TimeWindow
 	if config.ScaleDownDelay > 0 {
 		maxTimeWindow = maxtimewindow.NewTimeWindow(config.ScaleDownDelay, scaleDownDelayGranularity)
@@ -65,7 +71,7 @@ func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) *SlidingWindowAutos
 	// accumulate enough data to make conscious decisions.
 	result.panicTime = time.Now()
 
-	return result
+	return result, nil
 }
 
 // Scale calculates the desired scale based on current metrics.
@@ -97,14 +103,12 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
 	var rawStablePodCount, rawPanicPodCount int32
 
-	if a.config.TargetValue == 0 {
-		// When target value is zero, any positive metric value would require infinite pods
-		// So we set to a very large value that will be clamped by rate limits and max scale
-		rawStablePodCount = math.MaxInt32
-		rawPanicPodCount = math.MaxInt32
-	} else {
+	if a.config.TargetValue > 0 {
 		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TargetValue))
 		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TargetValue))
+	} else if a.config.TotalTargetValue > 0 {
+		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TotalTargetValue))
+		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TotalTargetValue))
 	}
 
 	// Apply scale limits
@@ -173,9 +177,9 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	return api.ScaleRecommendation{
-		DesiredPodCount:     desiredPodCount,
-		ScaleValid:          true,
-		InPanicMode:         inPanicMode,
+		DesiredPodCount: desiredPodCount,
+		ScaleValid:      true,
+		InPanicMode:     inPanicMode,
 	}
 }
 
@@ -183,6 +187,10 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 func (a *SlidingWindowAutoscaler) Update(config api.AutoscalerConfig) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if err := libkpaconfig.Validate(&config); err != nil {
+		return fmt.Errorf("failed to validate config: %w", err)
+	}
 
 	a.config = config
 

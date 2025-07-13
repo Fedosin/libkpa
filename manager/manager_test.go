@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fedosin/libkpa/api"
+	libkpaconfig "github.com/Fedosin/libkpa/config"
 )
 
 func TestNewScaler(t *testing.T) {
@@ -59,16 +59,15 @@ func TestNewScaler(t *testing.T) {
 		},
 	}
 
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-		PanicThreshold:        2.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
+	config.PanicThreshold = 2.0
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scaler, err := NewScaler(tt.scalerName, config, tt.algoType)
+			scaler, err := NewScaler(tt.scalerName, *config, tt.algoType)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error but got none")
@@ -91,13 +90,12 @@ func TestNewScaler(t *testing.T) {
 }
 
 func TestScalerChangeAggregationAlgorithm(t *testing.T) {
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
 
-	scaler, err := NewScaler("test-scaler", config, "linear")
+	scaler, err := NewScaler("test-scaler", *config, "linear")
 	if err != nil {
 		t.Fatalf("failed to create scaler: %v", err)
 	}
@@ -122,16 +120,15 @@ func TestScalerChangeAggregationAlgorithm(t *testing.T) {
 }
 
 func TestScalerRecordAndScale(t *testing.T) {
-	config := api.AutoscalerConfig{
-		StableWindow:          10 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-		PanicThreshold:        2.0,
-		MaxScaleUpRate:        1000.0,
-		MaxScaleDownRate:      2.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 10 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
+	config.PanicThreshold = 2.0
+	config.MaxScaleUpRate = 1000.0
+	config.MaxScaleDownRate = 2.0
 
-	scaler, err := NewScaler("test-scaler", config, "linear")
+	scaler, err := NewScaler("test-scaler", *config, "linear")
 	if err != nil {
 		t.Fatalf("failed to create scaler: %v", err)
 	}
@@ -184,13 +181,13 @@ func TestNewManager(t *testing.T) {
 	}
 
 	// Test with initial scalers
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
-	scaler1, _ := NewScaler("cpu", config, "linear")
-	scaler2, _ := NewScaler("memory", config, "weighted")
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
+
+	scaler1, _ := NewScaler("cpu", *config, "linear")
+	scaler2, _ := NewScaler("memory", *config, "weighted")
 
 	manager = NewManager(1, 10, scaler1, scaler2)
 	if len(manager.scalers) != 2 {
@@ -200,14 +197,13 @@ func TestNewManager(t *testing.T) {
 
 func TestManagerRegisterUnregister(t *testing.T) {
 	manager := NewManager(1, 10)
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
 
 	// Register a scaler
-	scaler, _ := NewScaler("cpu", config, "linear")
+	scaler, _ := NewScaler("cpu", *config, "linear")
 	manager.Register(scaler)
 
 	if len(manager.scalers) != 1 {
@@ -221,7 +217,7 @@ func TestManagerRegisterUnregister(t *testing.T) {
 	}
 
 	// Register with same name should replace
-	scaler2, _ := NewScaler("cpu", config, "weighted")
+	scaler2, _ := NewScaler("cpu", *config, "weighted")
 	manager.Register(scaler2)
 	if len(manager.scalers) != 1 {
 		t.Errorf("expected 1 scaler after replace, got %d", len(manager.scalers))
@@ -275,13 +271,12 @@ func TestManagerSetScaleBounds(t *testing.T) {
 
 func TestManagerChangeAggregationAlgorithm(t *testing.T) {
 	manager := NewManager(1, 10)
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
 
-	scaler, _ := NewScaler("cpu", config, "linear")
+	scaler, _ := NewScaler("cpu", *config, "linear")
 	manager.Register(scaler)
 
 	// Test changing existing scaler
@@ -299,13 +294,12 @@ func TestManagerChangeAggregationAlgorithm(t *testing.T) {
 
 func TestManagerRecord(t *testing.T) {
 	manager := NewManager(1, 10)
-	config := api.AutoscalerConfig{
-		StableWindow:          60 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 60 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
 
-	scaler, _ := NewScaler("cpu", config, "linear")
+	scaler, _ := NewScaler("cpu", *config, "linear")
 	manager.Register(scaler)
 
 	// Test recording to existing scaler
@@ -332,17 +326,22 @@ func TestManagerScale(t *testing.T) {
 	}
 
 	// Create scalers
-	config := api.AutoscalerConfig{
-		StableWindow:          10 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-		PanicThreshold:        2.0,
-		MaxScaleUpRate:        1000.0,
-		MaxScaleDownRate:      2.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 10 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
+	config.PanicThreshold = 2.0
+	config.MaxScaleUpRate = 1000.0
+	config.MaxScaleDownRate = 2.0
 
-	cpuScaler, _ := NewScaler("cpu", config, "linear")
-	memoryScaler, _ := NewScaler("memory", config, "linear")
+	cpuScaler, err := NewScaler("cpu", *config, "linear")
+	if err != nil {
+		t.Fatalf("failed to create scaler: %v", err)
+	}
+	memoryScaler, err := NewScaler("memory", *config, "linear")
+	if err != nil {
+		t.Fatalf("failed to create scaler: %v", err)
+	}
 
 	manager.Register(cpuScaler)
 	manager.Register(memoryScaler)
@@ -368,8 +367,8 @@ func TestManagerScale(t *testing.T) {
 
 	// Test with all invalid scalers (no data)
 	manager2 := NewManager(1, 10)
-	emptyScaler1, _ := NewScaler("empty1", config, "linear")
-	emptyScaler2, _ := NewScaler("empty2", config, "linear")
+	emptyScaler1, _ := NewScaler("empty1", *config, "linear")
+	emptyScaler2, _ := NewScaler("empty2", *config, "linear")
 	manager2.Register(emptyScaler1)
 	manager2.Register(emptyScaler2)
 
@@ -382,19 +381,18 @@ func TestManagerScale(t *testing.T) {
 func TestManagerScaleMultipleScenarios(t *testing.T) {
 	now := time.Now()
 
-	config := api.AutoscalerConfig{
-		StableWindow:          10 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-		PanicThreshold:        2.0,
-		MaxScaleUpRate:        1000.0,
-		MaxScaleDownRate:      2.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 10 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
+	config.PanicThreshold = 2.0
+	config.MaxScaleUpRate = 1000.0
+	config.MaxScaleDownRate = 2.0
 
 	// Scenario 1: CPU high, Memory low
 	manager := NewManager(1, 10)
-	cpuScaler, _ := NewScaler("cpu", config, "linear")
-	memoryScaler, _ := NewScaler("memory", config, "weighted")
+	cpuScaler, _ := NewScaler("cpu", *config, "linear")
+	memoryScaler, _ := NewScaler("memory", *config, "weighted")
 
 	manager.Register(cpuScaler)
 	manager.Register(memoryScaler)
@@ -411,8 +409,8 @@ func TestManagerScaleMultipleScenarios(t *testing.T) {
 
 	// Scenario 2: Both metrics want to scale to zero
 	manager2 := NewManager(0, 10)
-	cpuScaler2, _ := NewScaler("cpu", config, "linear")
-	memoryScaler2, _ := NewScaler("memory", config, "linear")
+	cpuScaler2, _ := NewScaler("cpu", *config, "linear")
+	memoryScaler2, _ := NewScaler("memory", *config, "linear")
 
 	manager2.Register(cpuScaler2)
 	manager2.Register(memoryScaler2)
@@ -430,15 +428,14 @@ func TestManagerScaleMultipleScenarios(t *testing.T) {
 
 func TestConcurrentAccess(t *testing.T) {
 	manager := NewManager(1, 100)
-	config := api.AutoscalerConfig{
-		StableWindow:          10 * time.Second,
-		PanicWindowPercentage: 10.0,
-		TargetValue:           100.0,
-	}
+	config := libkpaconfig.NewDefaultAutoscalerConfig()
+	config.StableWindow = 10 * time.Second
+	config.PanicWindowPercentage = 10.0
+	config.TargetValue = 100.0
 
 	// Create multiple scalers
 	for i := range 5 {
-		scaler, _ := NewScaler(string(rune('a'+i)), config, "linear")
+		scaler, _ := NewScaler(string(rune('a'+i)), *config, "linear")
 		manager.Register(scaler)
 	}
 
@@ -469,7 +466,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	go func() {
 		for i := range 50 {
-			scaler, _ := NewScaler(string(rune('z'-i%5)), config, "linear")
+			scaler, _ := NewScaler(string(rune('z'-i%5)), *config, "linear")
 			manager.Register(scaler)
 			manager.Unregister(string(rune('z' - i%5)))
 		}

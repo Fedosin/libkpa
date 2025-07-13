@@ -104,7 +104,8 @@ func TestLoad(t *testing.T) {
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
-				TargetValue:            0.0,
+				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         2.0, // 200% converted to fraction
 				PanicWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
@@ -134,6 +135,7 @@ func TestLoad(t *testing.T) {
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       3.5,
 				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         1.5, // 150% converted to fraction
 				PanicWindowPercentage:  20.0,
 				StableWindow:           120 * time.Second,
@@ -152,8 +154,30 @@ func TestLoad(t *testing.T) {
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
-				TargetValue:            0.0,
+				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         2.5, // Already a fraction, not converted
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               0,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
+		},
+		{
+			name: "total target value set",
+			envVars: map[string]string{
+				"AUTOSCALER_TARGET_VALUE":       "0", // Explicitly set to 0
+				"AUTOSCALER_TOTAL_TARGET_VALUE": "2000.0",
+			},
+			want: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalTargetValue:       2000.0,
+				PanicThreshold:         2.0,
 				PanicWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
@@ -245,7 +269,8 @@ func TestLoadFromMap(t *testing.T) {
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
-				TargetValue:            0.0,
+				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         2.0,
 				PanicWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
@@ -275,6 +300,7 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       3.5,
 				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         1.5,
 				PanicWindowPercentage:  20.0,
 				StableWindow:           120 * time.Second,
@@ -295,12 +321,34 @@ func TestLoadFromMap(t *testing.T) {
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         500.5,
 				MaxScaleDownRate:       2.0,
-				TargetValue:            0.0,
+				TargetValue:            100.0,
+				TotalTargetValue:       0.0,
 				PanicThreshold:         2.0,
 				PanicWindowPercentage:  10.0,
 				StableWindow:           30 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               5,
+				MaxScale:               0,
+				ActivationScale:        1,
+			},
+		},
+		{
+			name: "total target value from map",
+			data: map[string]string{
+				"target-value":       "0", // Explicitly set to 0
+				"total-target-value": "1500.0",
+			},
+			want: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         1000.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            0.0,
+				TotalTargetValue:       1500.0,
+				PanicThreshold:         2.0,
+				PanicWindowPercentage:  10.0,
+				StableWindow:           60 * time.Second,
+				ScaleDownDelay:         0 * time.Second,
+				MinScale:               0,
 				MaxScale:               0,
 				ActivationScale:        1,
 			},
@@ -437,17 +485,32 @@ func TestValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "negative target value",
+			name: "both target values zero",
 			config: &api.AutoscalerConfig{
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         2.0,
 				MaxScaleDownRate:       2.0,
-				TargetValue:            -1.0,
+				TargetValue:            0.0,
+				TotalTargetValue:       0.0,
 				StableWindow:           60 * time.Second,
 				ActivationScale:        1,
 			},
 			wantErr: true,
-			errMsg:  "target-value = -1, must be positive",
+			errMsg:  "either target-value or total-target-value must be positive",
+		},
+		{
+			name: "both target values set",
+			config: &api.AutoscalerConfig{
+				ScaleToZeroGracePeriod: 30 * time.Second,
+				MaxScaleUpRate:         2.0,
+				MaxScaleDownRate:       2.0,
+				TargetValue:            100.0,
+				TotalTargetValue:       1000.0,
+				StableWindow:           60 * time.Second,
+				ActivationScale:        1,
+			},
+			wantErr: true,
+			errMsg:  "cannot specify both target-value",
 		},
 		{
 			name: "max scale up rate too low",
@@ -632,7 +695,7 @@ func TestValidate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validate(tt.config)
+			err := Validate(tt.config)
 
 			if tt.wantErr {
 				if err == nil {
@@ -701,6 +764,7 @@ func configsEqual(a, b *api.AutoscalerConfig) bool {
 		a.MaxScaleUpRate == b.MaxScaleUpRate &&
 		a.MaxScaleDownRate == b.MaxScaleDownRate &&
 		a.TargetValue == b.TargetValue &&
+		a.TotalTargetValue == b.TotalTargetValue &&
 		a.PanicThreshold == b.PanicThreshold &&
 		a.PanicWindowPercentage == b.PanicWindowPercentage &&
 		a.StableWindow == b.StableWindow &&
