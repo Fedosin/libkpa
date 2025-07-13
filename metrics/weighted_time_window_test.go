@@ -25,7 +25,10 @@ import (
 
 func TestTimeWindowWeightedAverage(t *testing.T) {
 	now := time.Now()
-	buckets := NewWeightedTimeWindow(5*time.Second, granularity)
+	buckets, err := NewWeightedTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewWeightedTimeWindow failed: %v", err)
+	}
 
 	buckets.Record(now, 2)
 	expectedAvg := 2 * buckets.smoothingCoeff // 2*dm = dm.
@@ -68,7 +71,10 @@ func TestTimeWindowWeightedAverage(t *testing.T) {
 
 func TestWeightedTimeWindowResizeWindow(t *testing.T) {
 	startTime := time.Now()
-	buckets := NewWeightedTimeWindow(5*time.Second, granularity)
+	buckets, err := NewWeightedTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewWeightedTimeWindow failed: %v", err)
+	}
 
 	if got, want := buckets.smoothingCoeff, computeSmoothingCoeff(5); math.Abs(got-want) > weightPrecision {
 		t.Errorf("DecayMultipler = %v, want: %v", got, want)
@@ -113,7 +119,10 @@ func TestWeightedTimeWindowResizeWindow(t *testing.T) {
 
 func TestWeightedTimeWindowAverageWithZeros(t *testing.T) {
 	now := time.Now()
-	buckets := NewWeightedTimeWindow(10*time.Second, granularity)
+	buckets, err := NewWeightedTimeWindow(10*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewWeightedTimeWindow failed: %v", err)
+	}
 
 	// Fill the window with zeros
 	for i := range 10 {
@@ -138,7 +147,10 @@ func TestWeightedTimeWindowAverageWithZeros(t *testing.T) {
 
 func TestWeightedTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
 	now := time.Now()
-	buckets := NewWeightedTimeWindow(10*time.Second, granularity)
+	buckets, err := NewWeightedTimeWindow(10*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewWeightedTimeWindow failed: %v", err)
+	}
 
 	// Fill the window with random positive values
 	for i := range 10 {
@@ -165,5 +177,17 @@ func TestWeightedTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
 	// Test after some time has passed without new data
 	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
 		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
+
+func TestWeightedTimeWindowNegativeWindowAndGranularity(t *testing.T) {
+	_, err := NewWeightedTimeWindow(10*time.Second, -1*time.Second)
+	if err == nil {
+		t.Errorf("NewWeightedTimeWindow should fail with negative granularity")
+	}
+
+	_, err = NewWeightedTimeWindow(-10*time.Second, 1*time.Second)
+	if err == nil {
+		t.Errorf("NewWeightedTimeWindow should fail with negative window")
 	}
 }

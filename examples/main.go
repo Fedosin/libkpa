@@ -92,11 +92,18 @@ func main() {
 	metricTransmitter := transmitter.NewLogTransmitter(nil)
 
 	// Create metric windows for stable and panic averages
-	stableWindow := metrics.NewTimeWindow(cfg.StableWindow, time.Second)
-	panicWindow := metrics.NewTimeWindow(
+	stableWindow, err := metrics.NewTimeWindow(cfg.StableWindow, time.Second)
+	if err != nil {
+		log.Fatalf("Failed to create new stable time window: %v", err)
+	}
+
+	panicWindow, err := metrics.NewTimeWindow(
 		max(time.Second, time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100)),
 		time.Second,
 	)
+	if err != nil {
+		log.Fatalf("Failed to create new panic time window: %v", err)
+	}
 
 	// Create a mock metric collector
 	collector := &MockMetricCollector{baseLoad: 80}
