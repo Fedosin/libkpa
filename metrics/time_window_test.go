@@ -103,7 +103,10 @@ func TestTimeWindowSimple(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// New implementation test.
-			buckets := NewTimeWindow(2*time.Minute, tt.granularity)
+			buckets, err := NewTimeWindow(2*time.Minute, tt.granularity)
+			if err != nil {
+				t.Fatalf("NewTimeWindow failed: %v", err)
+			}
 			if !buckets.IsEmpty(trunc1) {
 				t.Error("Unexpected non empty result")
 			}
@@ -130,7 +133,10 @@ func TestTimeWindowSimple(t *testing.T) {
 
 func TestTimeWindowManyReps(t *testing.T) {
 	trunc1 := time.Now().Truncate(granularity)
-	buckets := NewTimeWindow(time.Minute, granularity)
+	buckets, err := NewTimeWindow(time.Minute, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 	for p := range 5 {
 		trunc1 = trunc1.Add(granularity)
 		for t := range 5 {
@@ -164,7 +170,10 @@ func TestTimeWindowManyReps(t *testing.T) {
 func TestTimeWindowManyRepsWithNonMonotonicalOrder(t *testing.T) {
 	start := time.Now().Truncate(granularity)
 	end := start
-	buckets := NewTimeWindow(time.Minute, granularity)
+	buckets, err := NewTimeWindow(time.Minute, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	d := []int{0, 3, 2, 1, 4}
 	for p := range 5 {
@@ -200,7 +209,10 @@ func TestTimeWindowManyRepsWithNonMonotonicalOrder(t *testing.T) {
 
 func TestTimeWindowWindowAverage(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// This verifies that we properly use firstWrite. Without that we'd get 0.2.
 	buckets.Record(now, 1)
@@ -285,7 +297,10 @@ func TestTimeWindowWindowAverage(t *testing.T) {
 func TestTimeWindowAverageWithLargeGap(t *testing.T) {
 	now := time.Now()
 	// Create a window with 30 buckets (60s window / 2s granularity)
-	buckets := NewTimeWindow(60*time.Second, 2*time.Second)
+	buckets, err := NewTimeWindow(60*time.Second, 2*time.Second)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Record some initial data
 	for i := range 10 {
@@ -320,7 +335,10 @@ func TestTimeWindowAverageWithLargeGap(t *testing.T) {
 // TestTimeWindowAverageNegativeValues tests that the window can handle and average negative values correctly.
 func TestTimeWindowAverageNegativeValues(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Record negative values
 	buckets.Record(now, -10)
@@ -346,7 +364,10 @@ func TestTimeWindowAverageNegativeValues(t *testing.T) {
 func TestTimeWindowAverageBoundaryConditions(t *testing.T) {
 	now := time.Now()
 	// Small window to make wraparound easier to test
-	buckets := NewTimeWindow(10*time.Second, 2*time.Second) // 5 buckets
+	buckets, err := NewTimeWindow(10*time.Second, 2*time.Second) // 5 buckets
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Fill all buckets
 	for i := range 5 {
@@ -380,7 +401,10 @@ func TestTimeWindowAverageBoundaryConditions(t *testing.T) {
 
 func TestDescendingRecord(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(5*time.Second, 1*time.Second)
+	buckets, err := NewTimeWindow(5*time.Second, 1*time.Second)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	for i := 8 * time.Second; i >= 0*time.Second; i -= time.Second {
 		buckets.Record(now.Add(i), 5)
@@ -395,7 +419,10 @@ func TestDescendingRecord(t *testing.T) {
 
 func TestTimeWindowHoles(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	for i := range 5 {
 		buckets.Record(now.Add(time.Duration(i)*time.Second), float64(i+1))
@@ -431,7 +458,10 @@ func TestTimeWindowHoles(t *testing.T) {
 
 func TestTimeWindowResizeWindow(t *testing.T) {
 	startTime := time.Now()
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Fill the whole bucketing list with rollover.
 	buckets.Record(startTime, 1)
@@ -523,7 +553,10 @@ func TestTimeWindowWindowUpdate3sGranularity(t *testing.T) {
 	trunc1 := time.Now().Truncate(granularity)
 
 	// So two buckets here (ceil(5/3)=ceil(1.6(6))=2).
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 	if got, want := len(buckets.buckets), 2; got != want {
 		t.Fatalf("Initial bucket count = %d, want: %d", got, want)
 	}
@@ -602,7 +635,10 @@ func TestTimeWindowWindowUpdate3sGranularity(t *testing.T) {
 
 func TestTimeWindowWindowUpdateNoOp(t *testing.T) {
 	startTime := time.Now().Add(-time.Minute)
-	buckets := NewTimeWindow(5*time.Second, granularity)
+	buckets, err := NewTimeWindow(5*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 	buckets.Record(startTime, 19.82)
 	if got, want := buckets.firstWrite, buckets.lastWrite; !got.Equal(want) {
 		t.Errorf("FirstWrite = %v, want: %v", got, want)
@@ -619,8 +655,10 @@ func BenchmarkWindowAverage(b *testing.B) {
 	for _, wl := range []int{30, 60, 120, 240, 600} {
 		b.Run(fmt.Sprintf("%v-win-len", wl), func(b *testing.B) {
 			tn := time.Now().Truncate(time.Second) // To simplify everything.
-			buckets := NewTimeWindow(time.Duration(wl)*time.Second,
-				time.Second /*granularity*/)
+			buckets, err := NewTimeWindow(time.Duration(wl)*time.Second, time.Second)
+			if err != nil {
+				b.Fatalf("NewTimeWindow failed: %v", err)
+			}
 			// Populate with some random data.
 			for i := range wl {
 				buckets.Record(tn.Add(time.Duration(i)*time.Second), rand.Float64()*100)
@@ -671,7 +709,10 @@ func (t *TimeWindow) forEachBucket(now time.Time, acc func(time time.Time, bucke
 
 func TestTimeWindowAverageWithZeros(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(10*time.Second, granularity)
+	buckets, err := NewTimeWindow(10*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Fill the window with zeros
 	for i := range 10 {
@@ -696,7 +737,10 @@ func TestTimeWindowAverageWithZeros(t *testing.T) {
 
 func TestTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
 	now := time.Now()
-	buckets := NewTimeWindow(10*time.Second, granularity)
+	buckets, err := NewTimeWindow(10*time.Second, granularity)
+	if err != nil {
+		t.Fatalf("NewTimeWindow failed: %v", err)
+	}
 
 	// Fill the window with random positive values
 	for i := range 10 {
@@ -723,5 +767,17 @@ func TestTimeWindowAverageWithPositiveValuesThenZeros(t *testing.T) {
 	// Test after some time has passed without new data
 	if got, want := buckets.WindowAverage(now.Add(12*time.Second)), 0.0; got != want {
 		t.Errorf("WindowAverage of zeros (with gap) = %v, want: %v", got, want)
+	}
+}
+
+func TestNegativeWindowAndGranularity(t *testing.T) {
+	_, err := NewTimeWindow(10*time.Second, -1*time.Second)
+	if err == nil {
+		t.Errorf("NewTimeWindow should fail with negative granularity")
+	}
+
+	_, err = NewTimeWindow(-10*time.Second, 1*time.Second)
+	if err == nil {
+		t.Errorf("NewTimeWindow should fail with negative window")
 	}
 }

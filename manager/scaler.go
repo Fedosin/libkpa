@@ -71,11 +71,23 @@ func NewScaler(
 	var stableAgg, panicAgg timeWindowInterface
 	switch algoType {
 	case "linear":
-		stableAgg = metrics.NewTimeWindow(cfg.StableWindow, granularity)
-		panicAgg = metrics.NewTimeWindow(panicWindow, granularity)
+		stableAgg, err = metrics.NewTimeWindow(cfg.StableWindow, granularity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create stable aggregator: %w", err)
+		}
+		panicAgg, err = metrics.NewTimeWindow(panicWindow, granularity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create panic aggregator: %w", err)
+		}
 	case "weighted":
-		stableAgg = metrics.NewWeightedTimeWindow(cfg.StableWindow, granularity)
-		panicAgg = metrics.NewWeightedTimeWindow(panicWindow, granularity)
+		stableAgg, err = metrics.NewWeightedTimeWindow(cfg.StableWindow, granularity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create stable aggregator: %w", err)
+		}
+		panicAgg, err = metrics.NewWeightedTimeWindow(panicWindow, granularity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create panic aggregator: %w", err)
+		}
 	default:
 		return nil, fmt.Errorf("unknown algorithm type: %s (expected 'linear' or 'weighted')", algoType)
 	}
@@ -104,13 +116,27 @@ func (s *Scaler) ChangeAggregationAlgorithm(algoType string) error {
 
 	granularity := time.Second
 
+	var err error
+
 	switch algoType {
 	case "linear":
-		s.stableAggregator = metrics.NewTimeWindow(cfg.StableWindow, granularity)
-		s.panicAggregator = metrics.NewTimeWindow(panicWindow, granularity)
+		s.stableAggregator, err = metrics.NewTimeWindow(cfg.StableWindow, granularity)
+		if err != nil {
+			return fmt.Errorf("failed to create stable aggregator: %w", err)
+		}
+		s.panicAggregator, err = metrics.NewTimeWindow(panicWindow, granularity)
+		if err != nil {
+			return fmt.Errorf("failed to create panic aggregator: %w", err)
+		}
 	case "weighted":
-		s.stableAggregator = metrics.NewWeightedTimeWindow(cfg.StableWindow, granularity)
-		s.panicAggregator = metrics.NewWeightedTimeWindow(panicWindow, granularity)
+		s.stableAggregator, err = metrics.NewWeightedTimeWindow(cfg.StableWindow, granularity)
+		if err != nil {
+			return fmt.Errorf("failed to create stable aggregator: %w", err)
+		}
+		s.panicAggregator,err = metrics.NewWeightedTimeWindow(panicWindow, granularity)
+		if err != nil {
+			return fmt.Errorf("failed to create panic aggregator: %w", err)
+		}
 	default:
 		return fmt.Errorf("unknown algorithm type: %s (expected 'linear' or 'weighted')", algoType)
 	}

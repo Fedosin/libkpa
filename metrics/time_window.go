@@ -71,12 +71,12 @@ func (t *TimeWindow) String() string {
 
 // NewTimeWindow generates a new TimeWindow with the given
 // granularity.
-func NewTimeWindow(window, granularity time.Duration) *TimeWindow {
+func NewTimeWindow(window, granularity time.Duration) (*TimeWindow, error) {
 	if granularity <= 0 {
-		panic(fmt.Sprintf("granularity must be positive, got %v", granularity))
+		return nil, fmt.Errorf("granularity must be positive, got %v", granularity)
 	}
 	if window < granularity {
-		panic(fmt.Sprintf("window must be >= granularity, got window=%v, granularity=%v", window, granularity))
+		return nil, fmt.Errorf("window must be >= granularity, got window=%v, granularity=%v", window, granularity)
 	}
 
 	// Number of buckets is `window` divided by `granularity`, rounded up.
@@ -86,7 +86,7 @@ func NewTimeWindow(window, granularity time.Duration) *TimeWindow {
 		buckets:     make([]float64, int(nb)),
 		granularity: granularity,
 		window:      window,
-	}
+	}, nil
 }
 
 // IsEmpty returns true if no data has been recorded for the `window` period.

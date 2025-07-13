@@ -35,14 +35,19 @@ type WeightedTimeWindow struct {
 
 // NewWeightedTimeWindow generates a new WeightedTimeWindow with the given
 // granularity.
-func NewWeightedTimeWindow(window, granularity time.Duration) *WeightedTimeWindow {
+func NewWeightedTimeWindow(window, granularity time.Duration) (*WeightedTimeWindow, error) {
+	tw, err := NewTimeWindow(window, granularity)
+	if err != nil {
+		return nil, err
+	}
+
 	// Number of buckets is `window` divided by `granularity`, rounded up.
 	// e.g. 60s / 2s = 30.
 	nb := math.Ceil(float64(window) / float64(granularity))
 	return &WeightedTimeWindow{
-		TimeWindow:     NewTimeWindow(window, granularity),
+		TimeWindow:     tw,
 		smoothingCoeff: computeSmoothingCoeff(nb),
-	}
+	}, nil
 }
 
 // WindowAverage returns the exponential weighted average. This means
