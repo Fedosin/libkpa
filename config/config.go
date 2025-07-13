@@ -34,7 +34,6 @@ const (
 	// Default values
 	defaultMaxScaleUpRate           = 1000.0
 	defaultMaxScaleDownRate         = 2.0
-	defaultTargetBurstCapacity      = 211.0
 	defaultPanicWindowPercentage    = 10.0
 	defaultPanicThresholdPercentage = 200.0
 	defaultStableWindow             = 60 * time.Second
@@ -95,12 +94,6 @@ func Load() (*api.AutoscalerConfig, error) {
 	targetValue, err := getEnvFloat("TARGET_VALUE", 0.0)
 	errs.add(err)
 
-	totalValue, err := getEnvFloat("TOTAL_VALUE", 0.0)
-	errs.add(err)
-
-	targetBurstCapacity, err := getEnvFloat("TARGET_BURST_CAPACITY", defaultTargetBurstCapacity)
-	errs.add(err)
-
 	panicThreshold, err := getEnvFloat("PANIC_THRESHOLD_PERCENTAGE", defaultPanicThresholdPercentage)
 	errs.add(err)
 
@@ -131,8 +124,6 @@ func Load() (*api.AutoscalerConfig, error) {
 		MaxScaleUpRate:         maxScaleUpRate,
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
-		TotalValue:             totalValue,
-		TargetBurstCapacity:    targetBurstCapacity,
 		PanicThreshold:         panicThreshold,
 		PanicWindowPercentage:  panicWindowPercentage,
 		StableWindow:           stableWindow,
@@ -167,12 +158,6 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	targetValue, err := parseFloat(data["target-value"], 0.0)
 	errs.add(err)
 
-	totalValue, err := parseFloat(data["total-value"], 0.0)
-	errs.add(err)
-
-	targetBurstCapacity, err := parseFloat(data["target-burst-capacity"], defaultTargetBurstCapacity)
-	errs.add(err)
-
 	panicThreshold, err := parseFloat(data["panic-threshold-percentage"], defaultPanicThresholdPercentage)
 	errs.add(err)
 
@@ -203,8 +188,6 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 		MaxScaleUpRate:         maxScaleUpRate,
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
-		TotalValue:             totalValue,
-		TargetBurstCapacity:    targetBurstCapacity,
 		PanicThreshold:         panicThreshold,
 		PanicWindowPercentage:  panicWindowPercentage,
 		StableWindow:           stableWindow,
@@ -239,20 +222,9 @@ func validate(cfg *api.AutoscalerConfig) error {
 		errs.add(fmt.Errorf("scale-down-delay = %v, must be specified with at most second precision", cfg.ScaleDownDelay))
 	}
 
-	// Validate target burst capacity
-	if cfg.TargetBurstCapacity < 0 && cfg.TargetBurstCapacity != -1 {
-		errs.add(fmt.Errorf("target-burst-capacity must be either non-negative or -1 (for unlimited), was: %f", cfg.TargetBurstCapacity))
-	}
-
 	// Validate target values
-	if cfg.TargetValue > cfg.TotalValue {
-		errs.add(fmt.Errorf("target-value = %v, must be less than or equal to total-value = %v", cfg.TargetValue, cfg.TotalValue))
-	}
 	if cfg.TargetValue <= 0 {
 		errs.add(fmt.Errorf("target-value = %v, must be positive", cfg.TargetValue))
-	}
-	if cfg.TotalValue <= 0 {
-		errs.add(fmt.Errorf("total-value = %v, must be positive", cfg.TotalValue))
 	}
 
 	// Validate scale rates

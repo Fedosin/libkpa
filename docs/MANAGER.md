@@ -80,7 +80,6 @@ func main() {
         StableWindow:          60 * time.Second,
         PanicWindowPercentage: 10.0,
         TargetValue:           100.0,      // Target per pod
-        TotalValue:            1000.0,     // Max capacity per pod
         PanicThreshold:        2.0,        // 200% threshold
         MaxScaleUpRate:        1000.0,     // Unlimited scale up
         MaxScaleDownRate:      2.0,        // Max halve pods

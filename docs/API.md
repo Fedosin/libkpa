@@ -13,8 +13,6 @@ type AutoscalerConfig struct {
     MaxScaleUpRate         float64       // Max rate to scale up (e.g., 2.0 = double pods)
     MaxScaleDownRate       float64       // Max rate to scale down (e.g., 2.0 = halve pods)
     TargetValue            float64       // Target metric value per pod
-    TotalValue             float64       // Total capacity per pod
-    TargetBurstCapacity    float64       // Burst capacity without queuing
     PanicThreshold         float64       // Threshold to enter panic mode (as ratio)
     PanicWindowPercentage  float64       // Panic window as % of stable window
     StableWindow           time.Duration // Time window for stable metrics
@@ -45,7 +43,6 @@ The autoscaler's scaling recommendation:
 ```go
 type ScaleRecommendation struct {
     DesiredPodCount     int32   // Recommended number of pods
-    ExcessBurstCapacity int32   // Excess capacity (negative = insufficient)
     ScaleValid          bool    // Whether recommendation is valid
     InPanicMode         bool    // Whether in panic mode
 }
@@ -105,8 +102,6 @@ spec := api.AutoscalerConfig{
     MaxScaleUpRate:         10.0,
     MaxScaleDownRate:       2.0,
     TargetValue:            100.0,
-    TotalValue:             1000.0,
-    TargetBurstCapacity:    200.0,
     PanicThreshold:         2.0,
     PanicWindowPercentage:  10.0,
     StableWindow:           60 * time.Second,

@@ -42,8 +42,6 @@ func defaultConfig() api.AutoscalerConfig {
 		MaxScaleUpRate:        1000.0,
 		MaxScaleDownRate:      2.0,
 		TargetValue:           100.0,
-		TotalValue:            1000.0,
-		TargetBurstCapacity:   211.0,
 		PanicThreshold:        2.0, // 200%
 		PanicWindowPercentage: 10.0,
 		StableWindow:          60 * time.Second,
@@ -51,7 +49,6 @@ func defaultConfig() api.AutoscalerConfig {
 		MinScale:              0,
 		MaxScale:              0,
 		ActivationScale:       1,
-		Reachable:             true,
 	}
 }
 
@@ -120,7 +117,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		config            api.AutoscalerConfig
 		snapshot          mockMetricSnapshot
 		expectedPodCount  int32
-		expectedEBC       int32 // excess burst capacity
 	}{
 		{
 			name:   "scale up based on stable value",
@@ -131,7 +127,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 2, // start with 2 pods instead of 1
 			},
 			expectedPodCount:  3, // ceil(250/100)
-			expectedEBC:       1539, // floor(2*1000 - 211 - 250)
 		},
 		{
 			name:   "scale down based on stable value",
@@ -142,7 +137,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				readyPodCount: 5,
 			},
 			expectedPodCount:  2, // limited by max scale down rate (5/2.0)
-			expectedEBC:       4739, // floor(5*1000 - 211 - 50)
 		},
 		{
 			name: "respect min scale",
@@ -216,11 +210,6 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}
 			if recommendation.DesiredPodCount != tt.expectedPodCount {
 				t.Errorf("expected pod count %d, got %d", tt.expectedPodCount, recommendation.DesiredPodCount)
-			}
-			if tt.expectedEBC != 0 && (tt.name == "scale up based on stable value" || tt.name == "scale down based on stable value") {
-				if recommendation.ExcessBurstCapacity != tt.expectedEBC {
-					t.Errorf("expected excess burst capacity %d, got %d", tt.expectedEBC, recommendation.ExcessBurstCapacity)
-				}
 			}
 		})
 	}
@@ -356,27 +345,6 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	}
 }
 
-func TestSlidingWindowAutoscaler_Scale_NotReachable(t *testing.T) {
-	config := defaultConfig()
-	config.Reachable = false
-
-	autoscaler := NewSlidingWindowAutoscaler(config)
-	now := time.Now()
-
-	// When not reachable, maxScaleDown should be 0
-	snapshot := &mockMetricSnapshot{
-		stableValue:   10, // very low load
-		panicValue:    10,
-		readyPodCount: 5,
-		timestamp:     now,
-	}
-
-	recommendation := autoscaler.Scale(snapshot, now)
-	if recommendation.DesiredPodCount != 1 {
-		t.Errorf("expected pod count 1 (no scale down limit when not reachable), got %d", recommendation.DesiredPodCount)
-	}
-}
-
 func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing.T) {
 	config := defaultConfig()
 	config.ActivationScale = 3
@@ -417,59 +385,6 @@ func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
 	// Should calculate based on 1 pod instead of 0
 	if recommendation.DesiredPodCount != 1 {
 		t.Errorf("expected pod count 1, got %d", recommendation.DesiredPodCount)
-	}
-}
-
-func TestCalculateExcessBurstCapacity(t *testing.T) {
-	tests := []struct {
-		name                string
-		readyPods           int32
-		totalValue          float64
-		targetBurstCapacity float64
-		observedPanicValue  float64
-		expected            int32
-	}{
-		{
-			name:                "positive excess capacity",
-			readyPods:           5,
-			totalValue:          1000,
-			targetBurstCapacity: 211,
-			observedPanicValue:  500,
-			expected:            4289, // floor(5*1000 - 211 - 500)
-		},
-		{
-			name:                "negative excess capacity",
-			readyPods:           1,
-			totalValue:          1000,
-			targetBurstCapacity: 211,
-			observedPanicValue:  1000,
-			expected:            -211, // floor(1*1000 - 211 - 1000)
-		},
-		{
-			name:                "zero target burst capacity",
-			readyPods:           5,
-			totalValue:          1000,
-			targetBurstCapacity: 0,
-			observedPanicValue:  500,
-			expected:            0,
-		},
-		{
-			name:                "negative target burst capacity (unlimited)",
-			readyPods:           5,
-			totalValue:          1000,
-			targetBurstCapacity: -1,
-			observedPanicValue:  500,
-			expected:            -1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := calculateExcessBurstCapacity(tt.readyPods, tt.totalValue, tt.targetBurstCapacity, tt.observedPanicValue)
-			if result != tt.expected {
-				t.Errorf("expected %d, got %d", tt.expected, result)
-			}
-		})
 	}
 }
 

@@ -11,7 +11,6 @@ All environment variables use the `AUTOSCALER_` prefix.
 | Environment Variable | Type | Default | Description | Valid Range |
 |---------------------|------|---------|-------------|-------------|
 | `AUTOSCALER_TARGET_VALUE` | float | `100.0` | Target metric value per pod | > 0.01 |
-| `AUTOSCALER_TOTAL_VALUE` | float | `1000.0` | Total capacity per pod | > 0 |
 | `AUTOSCALER_MAX_SCALE_UP_RATE` | float | `1000.0` | Maximum rate to scale up pods | > 1.0 |
 | `AUTOSCALER_MAX_SCALE_DOWN_RATE` | float | `2.0` | Maximum rate to scale down pods | > 1.0 |
 
@@ -38,11 +37,6 @@ All environment variables use the `AUTOSCALER_` prefix.
 | `AUTOSCALER_MAX_SCALE` | int | `0` | Maximum number of pods (0 = unlimited) | >= 0 |
 | `AUTOSCALER_ACTIVATION_SCALE` | int | `1` | Minimum pods when scaling from zero | >= 1 |
 
-### Target Configuration
-
-| Environment Variable | Type | Default | Description | Valid Range |
-|---------------------|------|---------|-------------|-------------|
-| `AUTOSCALER_TARGET_BURST_CAPACITY` | float | `211.0` | Target burst capacity (-1 = unlimited) | >= -1 |
 
 ## Configuration Map Format
 
@@ -51,7 +45,6 @@ When using `config.LoadFromMap()`, use the following keys:
 ```go
 configMap := map[string]string{
     "target-value":                              "100",
-    "total-value":                               "1000",
     "max-scale-up-rate":                         "10.0",
     "max-scale-down-rate":                       "2.0",
     "stable-window":                             "60s",
@@ -62,7 +55,6 @@ configMap := map[string]string{
     "min-scale":                                 "0",
     "max-scale":                                 "10",
     "activation-scale":                          "1",
-    "target-burst-capacity":                     "211",
 }
 
 config, err := config.LoadFromMap(configMap)
@@ -99,7 +91,6 @@ For services where response time is critical:
 
 ```bash
 export AUTOSCALER_TARGET_VALUE=50
-export AUTOSCALER_TARGET_BURST_CAPACITY=100
 export AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE=150
 export AUTOSCALER_PANIC_WINDOW_PERCENTAGE=5
 export AUTOSCALER_MIN_SCALE=2
@@ -114,7 +105,7 @@ The configuration validation enforces these rules:
 3. **Percentages**: 
    - `panic-window-percentage`: [1, 100]
 4. **Scale rates**: Must be > 1.0
-5. **Target values**: Must be >= 0.01 and <= total-value
+5. **Target values**: Must be >= 0.01
 6. **Stable window**: Must be between 5s and 600s
 
 ## Best Practices

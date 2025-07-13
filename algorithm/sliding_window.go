@@ -92,10 +92,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 
 	// Calculate scale limits based on current pod count
 	maxScaleUp := int32(math.Ceil(a.config.MaxScaleUpRate * float64(readyPodCount)))
-	maxScaleDown := int32(0)
-	if a.config.Reachable {
-		maxScaleDown = int32(math.Floor(float64(readyPodCount) / a.config.MaxScaleDownRate))
-	}
+	maxScaleDown := int32(math.Floor(float64(readyPodCount) / a.config.MaxScaleDownRate))
 
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
 	var rawStablePodCount, rawPanicPodCount int32
@@ -162,7 +159,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	// Apply scale-down delay if configured
-	if a.config.Reachable && a.maxTimeWindow != nil {
+	if a.maxTimeWindow != nil {
 		a.maxTimeWindow.Record(now, desiredPodCount)
 		desiredPodCount = a.maxTimeWindow.Current()
 	}
@@ -175,17 +172,8 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		desiredPodCount = a.config.MaxScale
 	}
 
-	// Calculate excess burst capacity
-	excessBurstCapacity := calculateExcessBurstCapacity(
-		snapshot.ReadyPodCount(),
-		a.config.TotalValue,
-		a.config.TargetBurstCapacity,
-		observedPanicValue,
-	)
-
 	return api.ScaleRecommendation{
 		DesiredPodCount:     desiredPodCount,
-		ExcessBurstCapacity: excessBurstCapacity,
 		ScaleValid:          true,
 		InPanicMode:         inPanicMode,
 	}
@@ -211,20 +199,4 @@ func (a *SlidingWindowAutoscaler) GetConfig() api.AutoscalerConfig {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.config
-}
-
-// calculateExcessBurstCapacity computes the excess burst capacity.
-// A negative value means the deployment doesn't have enough capacity
-// to handle the target burst capacity.
-func calculateExcessBurstCapacity(readyPods int32, totalValue, targetBurstCapacity, observedPanicValue float64) int32 {
-	if targetBurstCapacity == 0 {
-		return 0
-	}
-	if targetBurstCapacity < 0 {
-		return -1 // Unlimited
-	}
-
-	totalCapacity := float64(readyPods) * totalValue
-	excessBurstCapacity := math.Floor(totalCapacity - targetBurstCapacity - observedPanicValue)
-	return int32(excessBurstCapacity)
 }

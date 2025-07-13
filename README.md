@@ -14,7 +14,6 @@ This library extracts the battle-tested autoscaling algorithms from Knative Serv
 - **Configurable scale-up/down rates** to prevent flapping
 - **Scale-to-zero capabilities** with grace periods
 - **Support for multiple metrics**
-- **Burst capacity calculations** for traffic absorption
 
 ## Installation
 
