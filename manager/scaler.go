@@ -56,7 +56,10 @@ func NewScaler(
 	}
 
 	// Create the sliding window autoscaler
-	algoScaler := algorithm.NewSlidingWindowAutoscaler(cfg)
+	algoScaler, err := algorithm.NewSlidingWindowAutoscaler(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sliding window autoscaler: %w", err)
+	}
 
 	// Calculate panic window duration
 	panicWindow := max(time.Second, time.Duration(float64(cfg.StableWindow) * cfg.PanicWindowPercentage / 100.0))

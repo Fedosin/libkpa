@@ -145,11 +145,36 @@ func Load() (*api.AutoscalerConfig, error) {
 	}
 
 	// Validate the configuration
-	if err := validate(cfg); err != nil {
+	if err = Validate(cfg); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+// NewDefaultAutoscalerConfig creates an AutoscalerConfig with all default values.
+func NewDefaultAutoscalerConfig() *api.AutoscalerConfig {
+	cfg := &api.AutoscalerConfig{
+		ScaleToZeroGracePeriod: defaultScaleToZeroGracePeriod,
+		MaxScaleUpRate:         defaultMaxScaleUpRate,
+		MaxScaleDownRate:       defaultMaxScaleDownRate,
+		TargetValue:            defaultTargetValue,
+		TotalTargetValue:       defaultTotalTargetValue,
+		PanicThreshold:         defaultPanicThresholdPercentage,
+		PanicWindowPercentage:  defaultPanicWindowPercentage,
+		StableWindow:           defaultStableWindow,
+		ScaleDownDelay:         defaultScaleDownDelay,
+		MinScale:               defaultMinScale,
+		MaxScale:               defaultMaxScale,
+		ActivationScale:        defaultActivationScale,
+	}
+
+	// Adjust percentage to fraction if needed
+	if cfg.PanicThreshold > 10.0 {
+		cfg.PanicThreshold /= 100.0
+	}
+
+	return cfg
 }
 
 // LoadFromMap creates a Config from a map of string values.
@@ -217,15 +242,15 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	}
 
 	// Validate the configuration
-	if err := validate(cfg); err != nil {
+	if err = Validate(cfg); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
 }
 
-// validate ensures all configuration values are valid.
-func validate(cfg *api.AutoscalerConfig) error {
+// Validate ensures all configuration values are valid.
+func Validate(cfg *api.AutoscalerConfig) error {
 	errs := &configErrors{}
 
 	// Validate scale-to-zero grace period

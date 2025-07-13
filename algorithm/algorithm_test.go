@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
+	libkpaconfig "github.com/Fedosin/libkpa/config"
 )
 
 // mockMetricSnapshot implements api.MetricSnapshot for testing
@@ -36,22 +37,6 @@ func (m *mockMetricSnapshot) PanicValue() float64  { return m.panicValue }
 func (m *mockMetricSnapshot) ReadyPodCount() int32 { return m.readyPodCount }
 func (m *mockMetricSnapshot) Timestamp() time.Time { return m.timestamp }
 
-// Test fixtures
-func defaultConfig() api.AutoscalerConfig {
-	return api.AutoscalerConfig{
-		MaxScaleUpRate:        1000.0,
-		MaxScaleDownRate:      2.0,
-		TargetValue:           100.0,
-		PanicThreshold:        2.0, // 200%
-		PanicWindowPercentage: 10.0,
-		StableWindow:          60 * time.Second,
-		ScaleDownDelay:        0,
-		MinScale:              0,
-		MaxScale:              0,
-		ActivationScale:       1,
-	}
-}
-
 // Tests for SlidingWindowAutoscaler
 func TestNewSlidingWindowAutoscaler(t *testing.T) {
 	tests := []struct {
@@ -62,9 +47,9 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 		{
 			name: "with scale down delay",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := libkpaconfig.NewDefaultAutoscalerConfig()
 				c.ScaleDownDelay = 10 * time.Second
-				return c
+				return *c
 			}(),
 			wantPanic: false,
 		},
@@ -72,7 +57,10 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			autoscaler := NewSlidingWindowAutoscaler(tt.config)
+			autoscaler, err := NewSlidingWindowAutoscaler(tt.config)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if autoscaler == nil {
 				t.Fatal("expected non-nil autoscaler")
 			}
@@ -81,7 +69,11 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Scale_NoData(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
+	autoscaler, err := NewSlidingWindowAutoscaler(*libkpaconfig.NewDefaultAutoscalerConfig())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test with negative stable value
@@ -120,7 +112,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 	}{
 		{
 			name:   "scale up based on stable value",
-			config: defaultConfig(),
+			config: *libkpaconfig.NewDefaultAutoscalerConfig(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   250, // 2.5x target
 				panicValue:    250,
@@ -130,7 +122,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		},
 		{
 			name:   "scale down based on stable value",
-			config: defaultConfig(),
+			config: *libkpaconfig.NewDefaultAutoscalerConfig(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   50, // 0.5x target
 				panicValue:    50,
@@ -141,7 +133,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		{
 			name: "respect min scale",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.MinScale = 3
 				return c
 			}(),
@@ -155,7 +147,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		{
 			name: "respect max scale",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.MaxScale = 10
 				return c
 			}(),
@@ -169,7 +161,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		{
 			name: "activation scale",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.ActivationScale = 3
 				return c
 			}(),
@@ -181,24 +173,9 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			expectedPodCount: 3, // activation scale
 		},
 		{
-			name: "zero target value",
-			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
-				c.TargetValue = 0
-				c.MaxScale = 100
-				return c
-			}(),
-			snapshot: mockMetricSnapshot{
-				stableValue:   50,
-				panicValue:    50,
-				readyPodCount: 1,
-			},
-			expectedPodCount: -1, // should return invalid recommendation
-		},
-		{
 			name: "total target value - basic scaling",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.TargetValue = 0           // Use TotalTargetValue instead
 				c.TotalTargetValue = 1000.0 // Total across all pods
 				return c
@@ -213,7 +190,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		{
 			name: "total target value - scale down",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.TargetValue = 0
 				c.TotalTargetValue = 1000.0
 				return c
@@ -228,7 +205,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 		{
 			name: "total target value with activation scale",
 			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
+				c := *libkpaconfig.NewDefaultAutoscalerConfig()
 				c.TargetValue = 0
 				c.TotalTargetValue = 1000.0
 				c.ActivationScale = 3
@@ -241,26 +218,15 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			},
 			expectedPodCount: 3, // activation scale
 		},
-		{
-			name: "prefer TargetValue over TotalTargetValue",
-			config: func() api.AutoscalerConfig {
-				c := defaultConfig()
-				c.TargetValue = 100.0       // Per-pod target
-				c.TotalTargetValue = 1000.0 // Should be ignored
-				return c
-			}(),
-			snapshot: mockMetricSnapshot{
-				stableValue:   250, // 2.5x per-pod target
-				panicValue:    250,
-				readyPodCount: 2,
-			},
-			expectedPodCount: 3, // ceil(250/100) = 3, not ceil(250/1000)
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			autoscaler := NewSlidingWindowAutoscaler(tt.config)
+			autoscaler, err := NewSlidingWindowAutoscaler(tt.config)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
 			now := time.Now()
 			tt.snapshot.timestamp = now
 
@@ -284,8 +250,12 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
-	config := defaultConfig()
-	autoscaler := NewSlidingWindowAutoscaler(config)
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
+	autoscaler, err := NewSlidingWindowAutoscaler(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test entering panic mode
@@ -333,10 +303,14 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.TargetValue = 0
 	config.TotalTargetValue = 1000.0
-	autoscaler := NewSlidingWindowAutoscaler(config)
+	autoscaler, err := NewSlidingWindowAutoscaler(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test entering panic mode with total target value
@@ -357,11 +331,15 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) 
 }
 
 func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.MaxScaleUpRate = 2.0   // Can double
 	config.MaxScaleDownRate = 2.0 // Can halve
 
-	autoscaler := NewSlidingWindowAutoscaler(config)
+	autoscaler, err := NewSlidingWindowAutoscaler(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test scale up rate limit
@@ -392,14 +370,17 @@ func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Update(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
+	autoscaler, err := NewSlidingWindowAutoscaler(*libkpaconfig.NewDefaultAutoscalerConfig())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	newConfig := defaultConfig()
+	newConfig := *libkpaconfig.NewDefaultAutoscalerConfig()
 	newConfig.TargetValue = 200
 	newConfig.MaxScale = 50
 	newConfig.ScaleDownDelay = 5 * time.Second
 
-	err := autoscaler.Update(newConfig)
+	err = autoscaler.Update(newConfig)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -417,10 +398,14 @@ func TestSlidingWindowAutoscaler_Update(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.MinScale = 0
 
-	autoscaler := NewSlidingWindowAutoscaler(config)
+	autoscaler, err := NewSlidingWindowAutoscaler(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test scaling to zero with no load
@@ -438,10 +423,14 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 }
 
 func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.ActivationScale = 3
 
-	autoscaler := NewSlidingWindowAutoscaler(config)
+	autoscaler, err := NewSlidingWindowAutoscaler(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test that activation scale doesn't apply when metrics are zero
@@ -459,7 +448,11 @@ func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing
 }
 
 func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
-	autoscaler := NewSlidingWindowAutoscaler(defaultConfig())
+	autoscaler, err := NewSlidingWindowAutoscaler(*libkpaconfig.NewDefaultAutoscalerConfig())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	now := time.Now()
 
 	// Test with zero ready pods (should default to 1 to avoid division by zero)
@@ -482,7 +475,7 @@ func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
 
 // Tests for PanicModeCalculator
 func TestNewPanicModeCalculator(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	calculator := NewPanicModeCalculator(&config)
 
 	if calculator == nil {
@@ -528,7 +521,7 @@ func TestPanicModeCalculator_CalculatePanicWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := defaultConfig()
+			config := *libkpaconfig.NewDefaultAutoscalerConfig()
 			config.StableWindow = tt.stableWindow
 			config.PanicWindowPercentage = tt.panicPercent
 
@@ -543,7 +536,7 @@ func TestPanicModeCalculator_CalculatePanicWindow(t *testing.T) {
 }
 
 func TestPanicModeCalculator_ShouldEnterPanicMode(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.PanicThreshold = 2.0 // 200%
 	calculator := NewPanicModeCalculator(&config)
 
@@ -590,7 +583,7 @@ func TestPanicModeCalculator_ShouldEnterPanicMode(t *testing.T) {
 }
 
 func TestPanicModeCalculator_ShouldExitPanicMode(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
 	calculator := NewPanicModeCalculator(&config)
 
@@ -638,7 +631,7 @@ func TestPanicModeCalculator_ShouldExitPanicMode(t *testing.T) {
 }
 
 func TestPanicModeCalculator_CalculateDesiredPods(t *testing.T) {
-	config := defaultConfig()
+	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	calculator := NewPanicModeCalculator(&config)
 
 	tests := []struct {

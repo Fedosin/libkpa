@@ -83,7 +83,10 @@ func main() {
 	fmt.Println()
 
 	// Create the autoscaler
-	autoscaler := algorithm.NewSlidingWindowAutoscaler(*cfg)
+	autoscaler, err := algorithm.NewSlidingWindowAutoscaler(*cfg)
+	if err != nil {
+		log.Fatalf("Failed to create autoscaler: %v", err)
+	}
 
 	// Create a metric transmitter for logging
 	metricTransmitter := transmitter.NewLogTransmitter(nil)

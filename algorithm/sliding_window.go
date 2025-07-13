@@ -18,11 +18,13 @@ limitations under the License.
 package algorithm
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/Fedosin/libkpa/api"
+	libkpaconfig "github.com/Fedosin/libkpa/config"
 	"github.com/Fedosin/libkpa/maxtimewindow"
 )
 
@@ -47,7 +49,11 @@ const (
 )
 
 // NewSlidingWindowAutoscaler creates a new sliding window autoscaler.
-func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) *SlidingWindowAutoscaler {
+func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) (*SlidingWindowAutoscaler, error) {
+	if err := libkpaconfig.Validate(&config); err != nil {
+		return nil, err
+	}
+
 	var maxTimeWindow *maxtimewindow.TimeWindow
 	if config.ScaleDownDelay > 0 {
 		maxTimeWindow = maxtimewindow.NewTimeWindow(config.ScaleDownDelay, scaleDownDelayGranularity)
@@ -65,7 +71,7 @@ func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) *SlidingWindowAutos
 	// accumulate enough data to make conscious decisions.
 	result.panicTime = time.Now()
 
-	return result
+	return result, nil
 }
 
 // Scale calculates the desired scale based on current metrics.
@@ -103,11 +109,6 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	} else if a.config.TotalTargetValue > 0 {
 		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TotalTargetValue))
 		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TotalTargetValue))
-	} else {
-		// If neither target value is set, return invalid recommendation
-		return api.ScaleRecommendation{
-			ScaleValid: false,
-		}
 	}
 
 	// Apply scale limits
@@ -186,6 +187,10 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 func (a *SlidingWindowAutoscaler) Update(config api.AutoscalerConfig) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if err := libkpaconfig.Validate(&config); err != nil {
+		return fmt.Errorf("failed to validate config: %w", err)
+	}
 
 	a.config = config
 
