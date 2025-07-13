@@ -55,9 +55,9 @@ func defaultConfig() api.AutoscalerConfig {
 // Tests for SlidingWindowAutoscaler
 func TestNewSlidingWindowAutoscaler(t *testing.T) {
 	tests := []struct {
-		name         string
-		config       api.AutoscalerConfig
-		wantPanic    bool
+		name      string
+		config    api.AutoscalerConfig
+		wantPanic bool
 	}{
 		{
 			name: "with scale down delay",
@@ -66,7 +66,7 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 				c.ScaleDownDelay = 10 * time.Second
 				return c
 			}(),
-			wantPanic:    false,
+			wantPanic: false,
 		},
 	}
 
@@ -113,10 +113,10 @@ func TestSlidingWindowAutoscaler_Scale_NoData(t *testing.T) {
 
 func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 	tests := []struct {
-		name              string
-		config            api.AutoscalerConfig
-		snapshot          mockMetricSnapshot
-		expectedPodCount  int32
+		name             string
+		config           api.AutoscalerConfig
+		snapshot         mockMetricSnapshot
+		expectedPodCount int32
 	}{
 		{
 			name:   "scale up based on stable value",
@@ -126,7 +126,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    250,
 				readyPodCount: 2, // start with 2 pods instead of 1
 			},
-			expectedPodCount:  3, // ceil(250/100)
+			expectedPodCount: 3, // ceil(250/100)
 		},
 		{
 			name:   "scale down based on stable value",
@@ -136,7 +136,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    50,
 				readyPodCount: 5,
 			},
-			expectedPodCount:  2, // limited by max scale down rate (5/2.0)
+			expectedPodCount: 2, // limited by max scale down rate (5/2.0)
 		},
 		{
 			name: "respect min scale",
@@ -150,7 +150,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    50,
 				readyPodCount: 5,
 			},
-			expectedPodCount:  3, // min scale
+			expectedPodCount: 3, // min scale
 		},
 		{
 			name: "respect max scale",
@@ -164,7 +164,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    800,
 				readyPodCount: 5,
 			},
-			expectedPodCount:  8, // not limited by max scale yet
+			expectedPodCount: 8, // not limited by max scale yet
 		},
 		{
 			name: "activation scale",
@@ -178,7 +178,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    50,
 				readyPodCount: 1,
 			},
-			expectedPodCount:  3, // activation scale
+			expectedPodCount: 3, // activation scale
 		},
 		{
 			name: "zero target value",
@@ -193,7 +193,68 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    50,
 				readyPodCount: 1,
 			},
-			expectedPodCount:  100,  // limited by max scale
+			expectedPodCount: -1, // should return invalid recommendation
+		},
+		{
+			name: "total target value - basic scaling",
+			config: func() api.AutoscalerConfig {
+				c := defaultConfig()
+				c.TargetValue = 0           // Use TotalTargetValue instead
+				c.TotalTargetValue = 1000.0 // Total across all pods
+				return c
+			}(),
+			snapshot: mockMetricSnapshot{
+				stableValue:   2500, // Total value of 2500
+				panicValue:    2500,
+				readyPodCount: 2,
+			},
+			expectedPodCount: 3, // ceil(2500/1000) = 3
+		},
+		{
+			name: "total target value - scale down",
+			config: func() api.AutoscalerConfig {
+				c := defaultConfig()
+				c.TargetValue = 0
+				c.TotalTargetValue = 1000.0
+				return c
+			}(),
+			snapshot: mockMetricSnapshot{
+				stableValue:   500, // Total value of 500
+				panicValue:    500,
+				readyPodCount: 5,
+			},
+			expectedPodCount: 2, // limited by max scale down rate (5/2.0)
+		},
+		{
+			name: "total target value with activation scale",
+			config: func() api.AutoscalerConfig {
+				c := defaultConfig()
+				c.TargetValue = 0
+				c.TotalTargetValue = 1000.0
+				c.ActivationScale = 3
+				return c
+			}(),
+			snapshot: mockMetricSnapshot{
+				stableValue:   100, // Would only need 1 pod
+				panicValue:    100,
+				readyPodCount: 1,
+			},
+			expectedPodCount: 3, // activation scale
+		},
+		{
+			name: "prefer TargetValue over TotalTargetValue",
+			config: func() api.AutoscalerConfig {
+				c := defaultConfig()
+				c.TargetValue = 100.0       // Per-pod target
+				c.TotalTargetValue = 1000.0 // Should be ignored
+				return c
+			}(),
+			snapshot: mockMetricSnapshot{
+				stableValue:   250, // 2.5x per-pod target
+				panicValue:    250,
+				readyPodCount: 2,
+			},
+			expectedPodCount: 3, // ceil(250/100) = 3, not ceil(250/1000)
 		},
 	}
 
@@ -205,11 +266,18 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 
 			recommendation := autoscaler.Scale(&tt.snapshot, now)
 
-			if !recommendation.ScaleValid {
-				t.Fatal("expected valid recommendation")
-			}
-			if recommendation.DesiredPodCount != tt.expectedPodCount {
-				t.Errorf("expected pod count %d, got %d", tt.expectedPodCount, recommendation.DesiredPodCount)
+			if tt.expectedPodCount == -1 {
+				// Expecting invalid recommendation
+				if recommendation.ScaleValid {
+					t.Fatal("expected invalid recommendation")
+				}
+			} else {
+				if !recommendation.ScaleValid {
+					t.Fatal("expected valid recommendation")
+				}
+				if recommendation.DesiredPodCount != tt.expectedPodCount {
+					t.Errorf("expected pod count %d, got %d", tt.expectedPodCount, recommendation.DesiredPodCount)
+				}
 			}
 		})
 	}
@@ -261,6 +329,30 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
 	}
 	if recommendation.DesiredPodCount != 2 {
 		t.Errorf("expected pod count 2 after exiting panic mode, got %d", recommendation.DesiredPodCount)
+	}
+}
+
+func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) {
+	config := defaultConfig()
+	config.TargetValue = 0
+	config.TotalTargetValue = 1000.0
+	autoscaler := NewSlidingWindowAutoscaler(config)
+	now := time.Now()
+
+	// Test entering panic mode with total target value
+	snapshot := &mockMetricSnapshot{
+		stableValue:   1000,
+		panicValue:    5000, // 5x current total capacity, exceeds 2x threshold
+		readyPodCount: 2,
+		timestamp:     now,
+	}
+
+	recommendation := autoscaler.Scale(snapshot, now)
+	if !recommendation.InPanicMode {
+		t.Error("expected to enter panic mode")
+	}
+	if recommendation.DesiredPodCount != 5 {
+		t.Errorf("expected pod count 5, got %d", recommendation.DesiredPodCount)
 	}
 }
 

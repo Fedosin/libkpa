@@ -10,9 +10,12 @@ All environment variables use the `AUTOSCALER_` prefix.
 
 | Environment Variable | Type | Default | Description | Valid Range |
 |---------------------|------|---------|-------------|-------------|
-| `AUTOSCALER_TARGET_VALUE` | float | `100.0` | Target metric value per pod | > 0.01 |
+| `AUTOSCALER_TARGET_VALUE` | float | `100.0` | Target metric value per pod (mutually exclusive with TOTAL_TARGET_VALUE) | >= 0 |
+| `AUTOSCALER_TOTAL_TARGET_VALUE` | float | `0.0` | Total target metric value across all pods (mutually exclusive with TARGET_VALUE) | >= 0 |
 | `AUTOSCALER_MAX_SCALE_UP_RATE` | float | `1000.0` | Maximum rate to scale up pods | > 1.0 |
 | `AUTOSCALER_MAX_SCALE_DOWN_RATE` | float | `2.0` | Maximum rate to scale down pods | > 1.0 |
+
+**Note**: Either `TARGET_VALUE` or `TOTAL_TARGET_VALUE` must be set, but not both.
 
 ### Time Windows
 
@@ -44,7 +47,8 @@ When using `config.LoadFromMap()`, use the following keys:
 
 ```go
 configMap := map[string]string{
-    "target-value":                              "100",
+    "target-value":                              "100",   // Per-pod target (mutually exclusive with total-target-value)
+    "total-target-value":                        "0",     // Total target across all pods (mutually exclusive with target-value)
     "max-scale-up-rate":                         "10.0",
     "max-scale-down-rate":                       "2.0",
     "stable-window":                             "60s",

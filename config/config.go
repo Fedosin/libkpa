@@ -43,6 +43,8 @@ const (
 	defaultMinScale                 = int32(0)
 	defaultMaxScale                 = int32(0)
 	defaultActivationScale          = int32(1)
+	defaultTargetValue              = 100.0
+	defaultTotalTargetValue         = 0.0
 
 	// Validation constraints
 	minStableWindow = 5 * time.Second
@@ -91,7 +93,10 @@ func Load() (*api.AutoscalerConfig, error) {
 	maxScaleDownRate, err := getEnvFloat("MAX_SCALE_DOWN_RATE", defaultMaxScaleDownRate)
 	errs.add(err)
 
-	targetValue, err := getEnvFloat("TARGET_VALUE", 0.0)
+	targetValue, err := getEnvFloat("TARGET_VALUE", defaultTargetValue)
+	errs.add(err)
+
+	totalTargetValue, err := getEnvFloat("TOTAL_TARGET_VALUE", defaultTotalTargetValue)
 	errs.add(err)
 
 	panicThreshold, err := getEnvFloat("PANIC_THRESHOLD_PERCENTAGE", defaultPanicThresholdPercentage)
@@ -124,6 +129,7 @@ func Load() (*api.AutoscalerConfig, error) {
 		MaxScaleUpRate:         maxScaleUpRate,
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
+		TotalTargetValue:       totalTargetValue,
 		PanicThreshold:         panicThreshold,
 		PanicWindowPercentage:  panicWindowPercentage,
 		StableWindow:           stableWindow,
@@ -134,9 +140,13 @@ func Load() (*api.AutoscalerConfig, error) {
 	}
 
 	// Adjust percentage to fraction if needed
-
 	if cfg.PanicThreshold > 10.0 {
 		cfg.PanicThreshold /= 100.0
+	}
+
+	// Validate the configuration
+	if err := validate(cfg); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
@@ -155,7 +165,10 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	maxScaleDownRate, err := parseFloat(data["max-scale-down-rate"], defaultMaxScaleDownRate)
 	errs.add(err)
 
-	targetValue, err := parseFloat(data["target-value"], 0.0)
+	targetValue, err := parseFloat(data["target-value"], defaultTargetValue)
+	errs.add(err)
+
+	totalTargetValue, err := parseFloat(data["total-target-value"], defaultTotalTargetValue)
 	errs.add(err)
 
 	panicThreshold, err := parseFloat(data["panic-threshold-percentage"], defaultPanicThresholdPercentage)
@@ -188,6 +201,7 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 		MaxScaleUpRate:         maxScaleUpRate,
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
+		TotalTargetValue:       totalTargetValue,
 		PanicThreshold:         panicThreshold,
 		PanicWindowPercentage:  panicWindowPercentage,
 		StableWindow:           stableWindow,
@@ -200,6 +214,11 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	// Adjust percentage to fraction if needed
 	if cfg.PanicThreshold > 10.0 {
 		cfg.PanicThreshold /= 100.0
+	}
+
+	// Validate the configuration
+	if err := validate(cfg); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
@@ -223,8 +242,11 @@ func validate(cfg *api.AutoscalerConfig) error {
 	}
 
 	// Validate target values
-	if cfg.TargetValue <= 0 {
-		errs.add(fmt.Errorf("target-value = %v, must be positive", cfg.TargetValue))
+	if cfg.TargetValue <= 0 && cfg.TotalTargetValue <= 0 {
+		errs.add(fmt.Errorf("either target-value or total-target-value must be positive"))
+	}
+	if cfg.TargetValue > 0 && cfg.TotalTargetValue > 0 {
+		errs.add(fmt.Errorf("cannot specify both target-value (%v) and total-target-value (%v)", cfg.TargetValue, cfg.TotalTargetValue))
 	}
 
 	// Validate scale rates

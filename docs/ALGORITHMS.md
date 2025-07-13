@@ -37,16 +37,28 @@ func WindowAverage(metrics []float64, windowSize time.Duration) float64 {
 }
 ```
 
-### Example Scenario
+### Example Scenarios
 
+**Per-Pod Target Example:**
 Given:
-- Target concurrency: 100 per pod
+- Target concurrency: 100 per pod (`TargetValue = 100`)
 - Current pods: 3
 - Stable window metrics: [280, 290, 300, 310, 320] (average: 300)
 
 Calculation:
 ```
 Desired pods = ceil(300 / 100) = 3 pods (no change needed)
+```
+
+**Total Target Example:**
+Given:
+- Total target concurrency: 1000 (`TotalTargetValue = 1000`)
+- Current pods: 3
+- Stable window metrics: [2800, 2900, 3000, 3100, 3200] (average: 3000)
+
+Calculation:
+```
+Desired pods = ceil(3000 / 1000) = 3 pods (no change needed)
 ```
 
 ## Panic Mode
@@ -153,9 +165,23 @@ Time 35s: Load still low → desired=3 pods (now scale to 3)
 ## Mathematical Formulas
 
 ### Basic Scaling Formula
+
+There are two modes for calculating desired pods:
+
+**Per-Pod Target Mode** (when `TargetValue` is set):
 ```
 DesiredPods = ⌈ObservedMetric / TargetValuePerPod⌉
 ```
+
+**Total Target Mode** (when `TotalTargetValue` is set):
+```
+DesiredPods = ⌈ObservedMetric / TotalTargetValue⌉
+```
+
+The per-pod mode scales based on maintaining a target value per pod (e.g., 100 concurrent requests per pod).
+The total target mode scales based on maintaining a total value across all pods (e.g., 1000 total concurrent requests).
+
+Only one of these modes can be active at a time.
 
 ### Panic Mode Detection
 ```

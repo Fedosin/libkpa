@@ -37,6 +37,10 @@ type AutoscalerConfig struct {
 	// Default is 100.0.
 	TargetValue float64
 
+	// TotalTargetValue is the total desired value of the scaling metric.
+	// Default is 1000.0.
+	TotalTargetValue float64
+
 	// PanicThreshold is the threshold for entering panic mode, expressed as a
 	// percentage of desired pod count. If the observed load over the panic window
 	// exceeds this percentage of the current pod count capacity, panic mode is triggered.

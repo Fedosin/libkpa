@@ -12,7 +12,8 @@ The `AutoscalerConfig` type defines the parameters for autoscaling behavior:
 type AutoscalerConfig struct {
     MaxScaleUpRate         float64       // Max rate to scale up (e.g., 2.0 = double pods)
     MaxScaleDownRate       float64       // Max rate to scale down (e.g., 2.0 = halve pods)
-    TargetValue            float64       // Target metric value per pod
+    TargetValue            float64       // Target metric value per pod (mutually exclusive with TotalTargetValue)
+    TotalTargetValue       float64       // Total target metric value across all pods (mutually exclusive with TargetValue)
     PanicThreshold         float64       // Threshold to enter panic mode (as ratio)
     PanicWindowPercentage  float64       // Panic window as % of stable window
     StableWindow           time.Duration // Time window for stable metrics
@@ -21,7 +22,6 @@ type AutoscalerConfig struct {
     MaxScale               int32         // Maximum pod count (0 = unlimited)
     ActivationScale        int32         // Minimum scale when activating from zero
     ScaleToZeroGracePeriod time.Duration // Grace period before scaling to zero
-    Reachable              bool          // Whether service is reachable (deprecated)
 }
 ```
 

@@ -97,14 +97,17 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
 	var rawStablePodCount, rawPanicPodCount int32
 
-	if a.config.TargetValue == 0 {
-		// When target value is zero, any positive metric value would require infinite pods
-		// So we set to a very large value that will be clamped by rate limits and max scale
-		rawStablePodCount = math.MaxInt32
-		rawPanicPodCount = math.MaxInt32
-	} else {
+	if a.config.TargetValue > 0 {
 		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TargetValue))
 		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TargetValue))
+	} else if a.config.TotalTargetValue > 0 {
+		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TotalTargetValue))
+		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TotalTargetValue))
+	} else {
+		// If neither target value is set, return invalid recommendation
+		return api.ScaleRecommendation{
+			ScaleValid: false,
+		}
 	}
 
 	// Apply scale limits
@@ -173,9 +176,9 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	}
 
 	return api.ScaleRecommendation{
-		DesiredPodCount:     desiredPodCount,
-		ScaleValid:          true,
-		InPanicMode:         inPanicMode,
+		DesiredPodCount: desiredPodCount,
+		ScaleValid:      true,
+		InPanicMode:     inPanicMode,
 	}
 }
 
