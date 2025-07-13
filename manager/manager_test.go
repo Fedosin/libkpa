@@ -63,7 +63,6 @@ func TestNewScaler(t *testing.T) {
 		StableWindow:          60 * time.Second,
 		PanicWindowPercentage: 10.0,
 		TargetValue:           100.0,
-		TotalValue:            1000.0,
 		PanicThreshold:        2.0,
 	}
 
@@ -127,7 +126,6 @@ func TestScalerRecordAndScale(t *testing.T) {
 		StableWindow:          10 * time.Second,
 		PanicWindowPercentage: 10.0,
 		TargetValue:           100.0,
-		TotalValue:            1000.0,
 		PanicThreshold:        2.0,
 		MaxScaleUpRate:        1000.0,
 		MaxScaleDownRate:      2.0,
@@ -338,7 +336,6 @@ func TestManagerScale(t *testing.T) {
 		StableWindow:          10 * time.Second,
 		PanicWindowPercentage: 10.0,
 		TargetValue:           100.0,
-		TotalValue:            1000.0,
 		PanicThreshold:        2.0,
 		MaxScaleUpRate:        1000.0,
 		MaxScaleDownRate:      2.0,
@@ -389,7 +386,6 @@ func TestManagerScaleMultipleScenarios(t *testing.T) {
 		StableWindow:          10 * time.Second,
 		PanicWindowPercentage: 10.0,
 		TargetValue:           100.0,
-		TotalValue:            1000.0,
 		PanicThreshold:        2.0,
 		MaxScaleUpRate:        1000.0,
 		MaxScaleDownRate:      2.0,

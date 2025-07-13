@@ -34,16 +34,8 @@ type AutoscalerConfig struct {
 	MaxScaleDownRate float64
 
 	// TargetValue is the desired value of the scaling metric per pod that we aim to maintain.
-	// This must be less than or equal to TotalValue. Default is 100.0.
+	// Default is 100.0.
 	TargetValue float64
-
-	// TotalValue is the total capacity of the scaling metric that a pod can handle.
-	// Default is 1000.0.
-	TotalValue float64
-
-	// TargetBurstCapacity is the desired burst capacity to maintain without queuing.
-	// If negative, it means unlimited burst capacity. Default is 211.0.
-	TargetBurstCapacity float64
 
 	// PanicThreshold is the threshold for entering panic mode, expressed as a
 	// percentage of desired pod count. If the observed load over the panic window
@@ -78,11 +70,6 @@ type AutoscalerConfig struct {
 	// ScaleToZeroGracePeriod is the time to wait before scaling to zero
 	// after the service becomes idle. Default is 30s.
 	ScaleToZeroGracePeriod time.Duration
-
-	// Reachable indicates whether the service is reachable (has active traffic).
-	// This affects scale-down behavior. Default is true.
-	// Deprecated: Used in legacy scaling mode to support Knative Serving revisions.
-	Reachable bool
 }
 
 // Metrics represents collected metrics.
@@ -98,11 +85,6 @@ type Metrics struct {
 type ScaleRecommendation struct {
 	// DesiredPodCount is the recommended number of pods.
 	DesiredPodCount int32
-
-	// ExcessBurstCapacity is the difference between spare capacity and
-	// configured target burst capacity. Negative values indicate insufficient
-	// capacity for the desired burst level.
-	ExcessBurstCapacity int32
 
 	// ScaleValid indicates whether the recommendation is valid.
 	// False if insufficient data was available.

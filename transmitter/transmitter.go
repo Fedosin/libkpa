@@ -36,9 +36,6 @@ type MetricTransmitter interface {
 	// RecordTargetValue records the target metric value.
 	RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64)
 
-	// RecordExcessBurstCapacity records the excess burst capacity.
-	RecordExcessBurstCapacity(ctx context.Context, namespace, service string, value float64)
-
 	// RecordPanicMode records whether the autoscaler is in panic mode.
 	RecordPanicMode(ctx context.Context, namespace, service string, inPanic bool)
 }
@@ -78,11 +75,6 @@ func (t *LogTransmitter) RecordTargetValue(ctx context.Context, namespace, servi
 	t.logger.Printf("metric: target_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
-// RecordExcessBurstCapacity logs the excess burst capacity.
-func (t *LogTransmitter) RecordExcessBurstCapacity(ctx context.Context, namespace, service string, value float64) {
-	t.logger.Printf("metric: excess_burst_capacity{namespace=%s,service=%s} = %.2f\n", namespace, service, value)
-}
-
 // RecordPanicMode logs whether the autoscaler is in panic mode.
 func (t *LogTransmitter) RecordPanicMode(ctx context.Context, namespace, service string, inPanic bool) {
 	panicValue := 0
@@ -114,10 +106,6 @@ func (t *NoOpTransmitter) RecordPanicValue(ctx context.Context, namespace, servi
 
 // RecordTargetValue does nothing.
 func (t *NoOpTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64) {
-}
-
-// RecordExcessBurstCapacity does nothing.
-func (t *NoOpTransmitter) RecordExcessBurstCapacity(ctx context.Context, namespace, service string, value float64) {
 }
 
 // RecordPanicMode does nothing.

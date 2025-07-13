@@ -8,8 +8,7 @@ This document explains the autoscaling algorithms implemented in libkpa, derived
 2. [Panic Mode](#panic-mode)
 3. [Scale Rate Limiting](#scale-rate-limiting)
 4. [Scale-Down Delay](#scale-down-delay)
-5. [Excess Burst Capacity](#excess-burst-capacity)
-6. [Mathematical Formulas](#mathematical-formulas)
+5. [Mathematical Formulas](#mathematical-formulas)
 
 ## Sliding Window Algorithm
 
@@ -151,37 +150,6 @@ Time 20s: Load still low → desired=3 pods (but keep 10)
 Time 35s: Load still low → desired=3 pods (now scale to 3)
 ```
 
-## Excess Burst Capacity
-
-Excess burst capacity determines whether the Knative Activator should buffer requests.
-
-### Calculation
-
-```
-Total Capacity = Ready Pods * Total Value per Pod
-Excess = Total Capacity - Target Burst Capacity - Current Load
-```
-
-### Interpretation
-
-- **Positive excess**: Pods can handle burst without activator
-- **Negative excess**: Activator needed to buffer requests
-- **Zero/disabled**: No burst protection needed
-
-### Example
-
-```
-Ready pods: 5
-Total capacity per pod: 1000
-Target burst capacity: 2000
-Current load (panic): 1500
-
-Total capacity = 5 * 1000 = 5000
-Excess = 5000 - 2000 - 1500 = 1500
-
-Result: Positive excess, no activator needed
-```
-
 ## Mathematical Formulas
 
 ### Basic Scaling Formula
@@ -228,8 +196,7 @@ Here's the complete algorithm flow:
 5. Apply scale rate limits
 6. Apply scale-down delay (if configured)
 7. Apply min/max scale bounds
-8. Calculate excess burst capacity
-9. Return recommendation
+8. Return recommendation
 ```
 
 ## Tuning Guidelines
