@@ -175,11 +175,11 @@ DesiredPods = ⌈ObservedMetric / TargetValuePerPod⌉
 
 **Total Target Mode** (when `TotalTargetValue` is set):
 ```
-DesiredPods = ⌈ObservedMetric / TotalTargetValue⌉
+DesiredPods = ⌈CurrentNumberOfPods * ObservedMetric / TotalTargetValue⌉
 ```
 
 The per-pod mode scales based on maintaining a target value per pod (e.g., 100 concurrent requests per pod).
-The total target mode scales based on maintaining a total value across all pods (e.g., 1000 total concurrent requests).
+The total target mode scales based on maintaining a total value across all pods (e.g., 1000 total elements in the queue).
 
 Only one of these modes can be active at a time.
 

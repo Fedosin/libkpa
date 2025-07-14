@@ -107,8 +107,8 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TargetValue))
 		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TargetValue))
 	} else if a.config.TotalTargetValue > 0 {
-		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TotalTargetValue))
-		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TotalTargetValue))
+		rawStablePodCount = int32(math.Ceil(float64(readyPodCount) * observedStableValue / a.config.TotalTargetValue))
+		rawPanicPodCount = int32(math.Ceil(float64(readyPodCount) * observedPanicValue / a.config.TotalTargetValue))
 	}
 
 	// Apply scale limits

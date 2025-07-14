@@ -110,7 +110,6 @@ spec := api.AutoscalerConfig{
     MaxScale:               10,
     ActivationScale:        1,
     ScaleToZeroGracePeriod: 30 * time.Second,
-    Reachable:              true,
 }
 
 // Create the autoscaler
