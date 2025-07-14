@@ -25,21 +25,13 @@ import (
 	"github.com/Fedosin/libkpa/metrics"
 )
 
-// timeWindowInterface provides a common interface for TimeWindow operations
-type timeWindowInterface interface {
-	Record(now time.Time, value float64)
-	WindowAverage(now time.Time) float64
-	IsEmpty(now time.Time) bool
-	ResizeWindow(w time.Duration)
-}
-
 // Scaler represents a single autoscaler instance that combines metric aggregation
 // with a sliding window autoscaling algorithm.
 type Scaler struct {
 	name             string
 	algorithm        *algorithm.SlidingWindowAutoscaler
-	stableAggregator timeWindowInterface
-	panicAggregator  timeWindowInterface
+	stableAggregator api.MetricAggregator
+	panicAggregator  api.MetricAggregator
 }
 
 // NewScaler creates a new Scaler instance with the specified configuration.
@@ -68,7 +60,7 @@ func NewScaler(
 	granularity := time.Second
 
 	// Create the appropriate metric aggregators based on algoType
-	var stableAgg, panicAgg timeWindowInterface
+	var stableAgg, panicAgg api.MetricAggregator
 	switch algoType {
 	case "linear":
 		stableAgg, err = metrics.NewTimeWindow(cfg.StableWindow, granularity)

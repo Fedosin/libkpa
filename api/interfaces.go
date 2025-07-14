@@ -80,6 +80,9 @@ type MetricAggregator interface {
 
 	// IsEmpty returns true if no data exists in the window.
 	IsEmpty(now time.Time) bool
+
+	// ResizeWindow resizes the window to the given duration.
+	ResizeWindow(w time.Duration)
 }
 
 // Reporter reports autoscaler metrics for monitoring.

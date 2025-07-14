@@ -22,6 +22,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/Fedosin/libkpa/api"
 )
 
 const (
@@ -63,6 +65,8 @@ type TimeWindow struct {
 	// lastTime are included in this total.
 	windowTotal float64
 }
+
+var _ api.MetricAggregator = (*TimeWindow)(nil)
 
 // String implements the Stringer interface.
 func (t *TimeWindow) String() string {

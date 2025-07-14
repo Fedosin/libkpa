@@ -19,6 +19,8 @@ package metrics
 import (
 	"math"
 	"time"
+
+	"github.com/Fedosin/libkpa/api"
 )
 
 // WeightedTimeWindow is the implementation of buckets, that
@@ -32,6 +34,8 @@ type WeightedTimeWindow struct {
 	// and is bounded by minExponent below.
 	smoothingCoeff float64
 }
+
+var _ api.MetricAggregator = (*WeightedTimeWindow)(nil)
 
 // NewWeightedTimeWindow generates a new WeightedTimeWindow with the given
 // granularity.
