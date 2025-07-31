@@ -185,7 +185,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    2500,
 				readyPodCount: 2,
 			},
-			expectedPodCount: 3, // ceil(2500/1000) = 3
+			expectedPodCount: 5, // ceil(2 * 2500/1000) = 5
 		},
 		{
 			name: "total target value - scale down",
@@ -200,7 +200,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 				panicValue:    500,
 				readyPodCount: 5,
 			},
-			expectedPodCount: 2, // limited by max scale down rate (5/2.0)
+			expectedPodCount: 3, // ceil(5 * 500/1000) = 3
 		},
 		{
 			name: "total target value with activation scale",
@@ -325,8 +325,9 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) 
 	if !recommendation.InPanicMode {
 		t.Error("expected to enter panic mode")
 	}
-	if recommendation.DesiredPodCount != 5 {
-		t.Errorf("expected pod count 5, got %d", recommendation.DesiredPodCount)
+	// 2 pods * 5000 / 1000 = 10 pods
+	if recommendation.DesiredPodCount != 10 {
+		t.Errorf("expected pod count 10, got %d", recommendation.DesiredPodCount)
 	}
 }
 
