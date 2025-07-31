@@ -36,9 +36,9 @@ type SlidingWindowAutoscaler struct {
 	// Configuration
 	config api.AutoscalerConfig
 
-	// State for panic mode
-	panicTime    time.Time
-	maxPanicPods int32
+	// State for burst mode
+	burstTime    time.Time
+	maxBurstPods int32
 
 	// Delay window for scale-down decisions
 	maxTimeWindow *maxtimewindow.TimeWindow
@@ -64,12 +64,12 @@ func NewSlidingWindowAutoscaler(config api.AutoscalerConfig) (*SlidingWindowAuto
 		maxTimeWindow: maxTimeWindow,
 	}
 
-	// We always start in the panic mode.
+	// We always start in the burst mode.
 	// When Autoscaler restarts we lose metric history, which causes us to
 	// momentarily scale down, and that is not a desired behavior.
 	// Thus, we're keeping at least the current scale until we
 	// accumulate enough data to make conscious decisions.
-	result.panicTime = time.Now()
+	result.burstTime = time.Now()
 
 	return result, nil
 }
@@ -87,10 +87,10 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 
 	// Get metric values
 	observedStableValue := snapshot.StableValue()
-	observedPanicValue := snapshot.PanicValue()
+	observedBurstValue := snapshot.BurstValue()
 
 	// If no data, return invalid recommendation
-	if observedStableValue < 0 || observedPanicValue < 0 {
+	if observedStableValue < 0 || observedBurstValue < 0 {
 		return api.ScaleRecommendation{
 			ScaleValid: false,
 		}
@@ -101,19 +101,19 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	maxScaleDown := int32(math.Floor(float64(readyPodCount) / a.config.MaxScaleDownRate))
 
 	// raw pod counts calculated directly from metrics, prior to applying any rate limits.
-	var rawStablePodCount, rawPanicPodCount int32
+	var rawStablePodCount, rawBurstPodCount int32
 
 	if a.config.TargetValue > 0 {
 		rawStablePodCount = int32(math.Ceil(observedStableValue / a.config.TargetValue))
-		rawPanicPodCount = int32(math.Ceil(observedPanicValue / a.config.TargetValue))
+		rawBurstPodCount = int32(math.Ceil(observedBurstValue / a.config.TargetValue))
 	} else if a.config.TotalTargetValue > 0 {
 		rawStablePodCount = int32(math.Ceil(float64(readyPodCount) * observedStableValue / a.config.TotalTargetValue))
-		rawPanicPodCount = int32(math.Ceil(float64(readyPodCount) * observedPanicValue / a.config.TotalTargetValue))
+		rawBurstPodCount = int32(math.Ceil(float64(readyPodCount) * observedBurstValue / a.config.TotalTargetValue))
 	}
 
 	// Apply scale limits
 	desiredStablePodCount := min(max(rawStablePodCount, maxScaleDown), maxScaleUp)
-	desiredPanicPodCount := min(max(rawPanicPodCount, maxScaleDown), maxScaleUp)
+	desiredBurstPodCount := min(max(rawBurstPodCount, maxScaleDown), maxScaleUp)
 
 	// Apply activation scale if needed
 	if a.config.ActivationScale > 1 {
@@ -122,43 +122,43 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 		if rawStablePodCount > 0 && a.config.ActivationScale > desiredStablePodCount {
 			desiredStablePodCount = a.config.ActivationScale
 		}
-		if rawPanicPodCount > 0 && a.config.ActivationScale > desiredPanicPodCount {
-			desiredPanicPodCount = a.config.ActivationScale
+		if rawBurstPodCount > 0 && a.config.ActivationScale > desiredBurstPodCount {
+			desiredBurstPodCount = a.config.ActivationScale
 		}
 	}
 
-	// Check panic mode conditions
-	isOverPanicThreshold := float64(rawPanicPodCount)/float64(readyPodCount) >= a.config.PanicThreshold
-	inPanicMode := !a.panicTime.IsZero()
+	// Check burst mode conditions
+	isOverBurstThreshold := float64(rawBurstPodCount)/float64(readyPodCount) >= a.config.BurstThreshold
+	inBurstMode := !a.burstTime.IsZero()
 
-	// Update panic mode state
+	// Update burst mode state
 	switch {
-	case !inPanicMode && isOverPanicThreshold:
-		// Enter panic mode
-		a.panicTime = now
-		inPanicMode = true
-	case isOverPanicThreshold:
-		// Extend panic mode
-		a.panicTime = now
-	case inPanicMode && !isOverPanicThreshold && a.panicTime.Add(a.config.StableWindow).Before(now):
-		// Exit panic mode
-		a.panicTime = time.Time{}
-		a.maxPanicPods = 0
-		inPanicMode = false
+	case !inBurstMode && isOverBurstThreshold:
+		// Enter burst mode
+		a.burstTime = now
+		inBurstMode = true
+	case isOverBurstThreshold:
+		// Extend burst mode
+		a.burstTime = now
+	case inBurstMode && !isOverBurstThreshold && a.burstTime.Add(a.config.StableWindow).Before(now):
+		// Exit burst mode
+		a.burstTime = time.Time{}
+		a.maxBurstPods = 0
+		inBurstMode = false
 	}
 
 	// Determine final desired pod count
 	desiredPodCount := desiredStablePodCount
-	if inPanicMode {
-		// Use the higher of stable or panic pod count
-		if desiredPanicPodCount > desiredPodCount {
-			desiredPodCount = desiredPanicPodCount
+	if inBurstMode {
+		// Use the higher of stable or burst pod count
+		if desiredBurstPodCount > desiredPodCount {
+			desiredPodCount = desiredBurstPodCount
 		}
-		// Never scale down in panic mode
-		if desiredPodCount > a.maxPanicPods {
-			a.maxPanicPods = desiredPodCount
+		// Never scale down in burst mode
+		if desiredPodCount > a.maxBurstPods {
+			a.maxBurstPods = desiredPodCount
 		} else {
-			desiredPodCount = a.maxPanicPods
+			desiredPodCount = a.maxBurstPods
 		}
 	}
 
@@ -179,7 +179,7 @@ func (a *SlidingWindowAutoscaler) Scale(snapshot api.MetricSnapshot, now time.Ti
 	return api.ScaleRecommendation{
 		DesiredPodCount: desiredPodCount,
 		ScaleValid:      true,
-		InPanicMode:     inPanicMode,
+		InBurstMode:     inBurstMode,
 	}
 }
 

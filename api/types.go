@@ -41,15 +41,15 @@ type AutoscalerConfig struct {
 	// Default is 1000.0.
 	TotalTargetValue float64
 
-	// PanicThreshold is the threshold for entering panic mode, expressed as a
-	// percentage of desired pod count. If the observed load over the panic window
-	// exceeds this percentage of the current pod count capacity, panic mode is triggered.
+	// BurstThreshold is the threshold for entering burst mode, expressed as a
+	// percentage of desired pod count. If the observed load over the burst window
+	// exceeds this percentage of the current pod count capacity, burst mode is triggered.
 	// Default is 200 (200%).
-	PanicThreshold float64
+	BurstThreshold float64
 
-	// PanicWindowPercentage is the percentage of the stable window used for
-	// panic mode calculations. Must be in range [1.0, 100.0]. Default is 10.0.
-	PanicWindowPercentage float64
+	// BurstWindowPercentage is the percentage of the stable window used for
+	// burst mode calculations. Must be in range [1.0, 100.0]. Default is 10.0.
+	BurstWindowPercentage float64
 
 	// StableWindow is the time window over which metrics are averaged for
 	// scaling decisions. Must be between 5s and 600s. Default is 60s.
@@ -94,6 +94,6 @@ type ScaleRecommendation struct {
 	// False if insufficient data was available.
 	ScaleValid bool
 
-	// InPanicMode indicates whether the autoscaler is in panic mode.
-	InPanicMode bool
+	// InBurstMode indicates whether the autoscaler is in burst mode.
+	InBurstMode bool
 }

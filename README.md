@@ -10,7 +10,7 @@
 This library extracts the battle-tested autoscaling algorithms from Knative Serving, making them available for use in custom Kubernetes controllers without requiring the full Knative stack. It provides:
 
 - **Sliding window metric aggregation** for stable scaling decisions
-- **Panic mode** for handling traffic spikes
+- **Burst mode** for handling traffic spikes
 - **Configurable scale-up/down rates** to prevent flapping
 - **Scale-to-zero capabilities** with grace periods
 - **Support for multiple metrics**
@@ -50,7 +50,7 @@ func main() {
     // Create a metric snapshot (in real usage, collect from pods)
     snapshot := metrics.NewMetricSnapshot(
         150.0,  // stable value (e.g., total concurrent requests)
-        200.0,  // panic value
+        200.0,  // burst value
         3,      // current ready pods
         time.Now(),
     )
@@ -70,7 +70,7 @@ func main() {
 
 - **`api/`** - Core types, interfaces, and data structures for the autoscaler
 - **`config/`** - Configuration loading and validation from environment variables or maps
-- **`algorithm/`** - Autoscaling algorithm implementations (sliding window, panic mode)
+- **`algorithm/`** - Autoscaling algorithm implementations (sliding window, burst mode)
 - **`metrics/`** - Time-windowed metric collection and aggregation
 - **`transmitter/`** - Metric reporting interfaces for monitoring integration
 - **`maxtimewindow/`** - Time window collection and aggregation
@@ -88,8 +88,8 @@ func main() {
 ### Sliding Window Algorithm
 The core algorithm uses configurable time windows to aggregate metrics and make scaling decisions based on stable, averaged values rather than instantaneous spikes.
 
-### Panic Mode
-When load exceeds a configurable threshold, the autoscaler enters "panic mode" where it scales more aggressively and prevents scale-downs until the load stabilizes.
+### Burst Mode
+When load exceeds a configurable threshold, the autoscaler enters "burst mode" where it scales more aggressively and prevents scale-downs until the load stabilizes.
 
 ### Scale Bounds and Rates
 Configure minimum/maximum pod counts and control how fast the autoscaler can scale up or down to prevent resource thrashing.
@@ -111,7 +111,7 @@ The library can be configured through environment variables (with `AUTOSCALER_` 
 - `AUTOSCALER_TARGET_VALUE`: Target metric value per pod (mutually exclusive with `TOTAL_TARGET_VALUE`)
 - `AUTOSCALER_TOTAL_TARGET_VALUE`: Total target metric value across all pods (mutually exclusive with `TARGET_VALUE`)
 - `AUTOSCALER_STABLE_WINDOW`: Time window for metric averaging (default: 60s)
-- `AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE`: When to enter panic mode (default: 200%)
+- `AUTOSCALER_BURST_THRESHOLD_PERCENTAGE`: When to enter burst mode (default: 200%)
 
 See [CONFIGURATION.md](docs/CONFIGURATION.md) for the complete list.
 

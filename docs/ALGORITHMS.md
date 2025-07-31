@@ -5,7 +5,7 @@ This document explains the autoscaling algorithms implemented in libkpa, derived
 ## Table of Contents
 
 1. [Sliding Window Algorithm](#sliding-window-algorithm)
-2. [Panic Mode](#panic-mode)
+2. [Burst Mode](#burst-mode)
 3. [Scale Rate Limiting](#scale-rate-limiting)
 4. [Scale-Down Delay](#scale-down-delay)
 5. [Mathematical Formulas](#mathematical-formulas)
@@ -20,7 +20,7 @@ The sliding window algorithm is the core of libkpa's autoscaling logic. It aggre
 2. **Time Bucketing**: Metrics are stored in time-based buckets (typically 1-second granularity)
 3. **Window Aggregation**: Two windows are maintained:
    - **Stable Window**: Long-term average (default 60s)
-   - **Panic Window**: Short-term average (default 6s, 10% of stable)
+   - **Burst Window**: Short-term average (default 6s, 10% of stable)
 4. **Averaging**: Values are averaged over the window to smooth out spikes
 
 ### Implementation Details
@@ -61,45 +61,45 @@ Calculation:
 Desired pods = ceil(3000 / 1000) = 3 pods (no change needed)
 ```
 
-## Panic Mode
+## Burst Mode
 
-Panic mode provides rapid scale-up when the system is under extreme load, preventing request failures.
+Burst mode provides rapid scale-up when the system is under extreme load, preventing request failures.
 
 ### Triggering Conditions
 
-Panic mode is entered when:
+Burst mode is entered when:
 ```
-(Panic Window Average / Current Capacity) >= Panic Threshold
+(Burst Window Average / Current Capacity) >= Burst Threshold
 ```
 
-Default panic threshold is 2.0 (200%), meaning panic triggers when desired pods are double the current count.
+Default burst threshold is 2.0 (200%), meaning burst triggers when desired pods are double the current count.
 
-### Behavior in Panic Mode
+### Behavior in Burst Mode
 
 1. **No Scale Down**: Pod count never decreases
-2. **Aggressive Scale Up**: Uses panic window metrics for faster response
-3. **High Water Mark**: Maintains the highest pod count reached during panic
+2. **Aggressive Scale Up**: Uses burst window metrics for faster response
+3. **High Water Mark**: Maintains the highest pod count reached during burst
 
 ### Exit Conditions
 
-Panic mode exits when:
-1. Load drops below panic threshold AND
+Burst mode exits when:
+1. Load drops below burst threshold AND
 2. A full stable window has passed since load dropped
 
 ### Example
 
 ```
-Time 0s: Current=2 pods, Panic metric=500, Threshold=200%
+Time 0s: Current=2 pods, Burst metric=500, Threshold=200%
          Desired = 500/100 = 5 pods
-         5/2 = 250% > 200% → ENTER PANIC MODE
+         5/2 = 250% > 200% → ENTER BURST MODE
          Scale to 5 pods
 
-Time 30s: Current=5 pods, Panic metric=300
+Time 30s: Current=5 pods, Burst metric=300
           Desired = 300/100 = 3 pods
-          But in panic mode → maintain 5 pods
+          But in burst mode → maintain 5 pods
 
-Time 90s: Panic metric=150, below threshold for 60s
-          → EXIT PANIC MODE
+Time 90s: Burst metric=150, below threshold for 60s
+          → EXIT BURST MODE
           Can now scale down to 2 pods
 ```
 
@@ -183,10 +183,10 @@ The total target mode scales based on maintaining a total value across all pods 
 
 Only one of these modes can be active at a time.
 
-### Panic Mode Detection
+### Burst Mode Detection
 ```
-PanicRatio = DesiredPodsPanic / CurrentPods
-InPanicMode = PanicRatio >= PanicThreshold
+BurstRatio = DesiredPodsBurst / CurrentPods
+InBurstMode = BurstRatio >= BurstThreshold
 ```
 
 ### Rate Limited Scaling
@@ -196,9 +196,9 @@ ScaleDownLimit = ⌊CurrentPods / MaxScaleDownRate⌋
 FinalDesired = max(ScaleDownLimit, min(DesiredPods, ScaleUpLimit))
 ```
 
-### Window Percentile (Panic Window)
+### Window Percentile (Burst Window)
 ```
-PanicWindowSize = StableWindowSize × (PanicWindowPercentage / 100)
+BurstWindowSize = StableWindowSize × (BurstWindowPercentage / 100)
 ```
 
 ### Activation Scale Application
@@ -213,12 +213,12 @@ Here's the complete algorithm flow:
 
 ```
 1. Collect metrics from all pods
-2. Calculate stable and panic window averages
+2. Calculate stable and burst window averages
 3. Determine desired pods: ceil(metric / target)
-4. Check panic mode:
-   - If should enter → enter panic mode
-   - If in panic → use max(stable, panic) desired
-   - If should exit → exit panic mode
+4. Check burst mode:
+   - If should enter → enter burst mode
+   - If in burst → use max(stable, burst) desired
+   - If should exit → exit burst mode
 5. Apply scale rate limits
 6. Apply scale-down delay (if configured)
 7. Apply min/max scale bounds
@@ -230,11 +230,11 @@ Here's the complete algorithm flow:
 ### For Stable Workloads
 - Increase stable window (120s-300s)
 - Enable scale-down delay (30s-60s)
-- Lower panic threshold (150%)
+- Lower burst threshold (150%)
 
 ### For Spiky Workloads
 - Decrease stable window (30s-60s)
-- Reduce panic window percentage (5%)
+- Reduce burst window percentage (5%)
 - Higher scale-up rate
 
 ### For Cost Optimization

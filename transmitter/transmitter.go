@@ -30,14 +30,14 @@ type MetricTransmitter interface {
 	// RecordStableValue records the stable window metric value.
 	RecordStableValue(ctx context.Context, namespace, service string, metric string, value float64)
 
-	// RecordPanicValue records the panic window metric value.
-	RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64)
+	// RecordBurstValue records the burst window metric value.
+	RecordBurstValue(ctx context.Context, namespace, service string, metric string, value float64)
 
 	// RecordTargetValue records the target metric value.
 	RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64)
 
-	// RecordPanicMode records whether the autoscaler is in panic mode.
-	RecordPanicMode(ctx context.Context, namespace, service string, inPanic bool)
+	// RecordBurstMode records whether the autoscaler is in burst mode.
+	RecordBurstMode(ctx context.Context, namespace, service string, inBurst bool)
 }
 
 // LogTransmitter is a simple transmitter that logs metrics to stdout.
@@ -65,9 +65,9 @@ func (t *LogTransmitter) RecordStableValue(ctx context.Context, namespace, servi
 	t.logger.Printf("metric: stable_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
-// RecordPanicValue logs the panic window metric value.
-func (t *LogTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64) {
-	t.logger.Printf("metric: panic_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
+// RecordBurstValue logs the burst window metric value.
+func (t *LogTransmitter) RecordBurstValue(ctx context.Context, namespace, service string, metric string, value float64) {
+	t.logger.Printf("metric: burst_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
 // RecordTargetValue logs the target metric value.
@@ -75,13 +75,13 @@ func (t *LogTransmitter) RecordTargetValue(ctx context.Context, namespace, servi
 	t.logger.Printf("metric: target_%s{namespace=%s,service=%s} = %.2f\n", metric, namespace, service, value)
 }
 
-// RecordPanicMode logs whether the autoscaler is in panic mode.
-func (t *LogTransmitter) RecordPanicMode(ctx context.Context, namespace, service string, inPanic bool) {
-	panicValue := 0
-	if inPanic {
-		panicValue = 1
+// RecordBurstMode logs whether the autoscaler is in burst mode.
+func (t *LogTransmitter) RecordBurstMode(ctx context.Context, namespace, service string, inBurst bool) {
+	burstValue := 0
+	if inBurst {
+		burstValue = 1
 	}
-	t.logger.Printf("metric: panic_mode{namespace=%s,service=%s} = %d\n", namespace, service, panicValue)
+	t.logger.Printf("metric: burst_mode{namespace=%s,service=%s} = %d\n", namespace, service, burstValue)
 }
 
 // NoOpTransmitter is a transmitter that does nothing.
@@ -100,14 +100,14 @@ func (t *NoOpTransmitter) RecordDesiredPods(ctx context.Context, namespace, serv
 func (t *NoOpTransmitter) RecordStableValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
-// RecordPanicValue does nothing.
-func (t *NoOpTransmitter) RecordPanicValue(ctx context.Context, namespace, service string, metric string, value float64) {
+// RecordBurstValue does nothing.
+func (t *NoOpTransmitter) RecordBurstValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
 // RecordTargetValue does nothing.
 func (t *NoOpTransmitter) RecordTargetValue(ctx context.Context, namespace, service string, metric string, value float64) {
 }
 
-// RecordPanicMode does nothing.
-func (t *NoOpTransmitter) RecordPanicMode(ctx context.Context, namespace, service string, inPanic bool) {
+// RecordBurstMode does nothing.
+func (t *NoOpTransmitter) RecordBurstMode(ctx context.Context, namespace, service string, inBurst bool) {
 }

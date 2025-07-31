@@ -34,8 +34,8 @@ const (
 	// Default values
 	defaultMaxScaleUpRate           = 1000.0
 	defaultMaxScaleDownRate         = 2.0
-	defaultPanicWindowPercentage    = 10.0
-	defaultPanicThresholdPercentage = 200.0
+	defaultBurstWindowPercentage    = 10.0
+	defaultBurstThresholdPercentage = 200.0
 	defaultStableWindow             = 60 * time.Second
 	defaultScaleToZeroGracePeriod   = 30 * time.Second
 	defaultScaleDownDelay           = 0 * time.Second
@@ -99,10 +99,10 @@ func Load() (*api.AutoscalerConfig, error) {
 	totalTargetValue, err := getEnvFloat("TOTAL_TARGET_VALUE", defaultTotalTargetValue)
 	errs.add(err)
 
-	panicThreshold, err := getEnvFloat("PANIC_THRESHOLD_PERCENTAGE", defaultPanicThresholdPercentage)
+	burstThreshold, err := getEnvFloat("BURST_THRESHOLD_PERCENTAGE", defaultBurstThresholdPercentage)
 	errs.add(err)
 
-	panicWindowPercentage, err := getEnvFloat("PANIC_WINDOW_PERCENTAGE", defaultPanicWindowPercentage)
+	burstWindowPercentage, err := getEnvFloat("BURST_WINDOW_PERCENTAGE", defaultBurstWindowPercentage)
 	errs.add(err)
 
 	stableWindow, err := getEnvDuration("STABLE_WINDOW", defaultStableWindow)
@@ -130,8 +130,8 @@ func Load() (*api.AutoscalerConfig, error) {
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
 		TotalTargetValue:       totalTargetValue,
-		PanicThreshold:         panicThreshold,
-		PanicWindowPercentage:  panicWindowPercentage,
+		BurstThreshold:         burstThreshold,
+		BurstWindowPercentage:  burstWindowPercentage,
 		StableWindow:           stableWindow,
 		ScaleDownDelay:         scaleDownDelay,
 		MinScale:               minScale,
@@ -140,8 +140,8 @@ func Load() (*api.AutoscalerConfig, error) {
 	}
 
 	// Adjust percentage to fraction if needed
-	if cfg.PanicThreshold > 10.0 {
-		cfg.PanicThreshold /= 100.0
+	if cfg.BurstThreshold > 10.0 {
+		cfg.BurstThreshold /= 100.0
 	}
 
 	// Validate the configuration
@@ -160,8 +160,8 @@ func NewDefaultAutoscalerConfig() *api.AutoscalerConfig {
 		MaxScaleDownRate:       defaultMaxScaleDownRate,
 		TargetValue:            defaultTargetValue,
 		TotalTargetValue:       defaultTotalTargetValue,
-		PanicThreshold:         defaultPanicThresholdPercentage,
-		PanicWindowPercentage:  defaultPanicWindowPercentage,
+		BurstThreshold:         defaultBurstThresholdPercentage,
+		BurstWindowPercentage:  defaultBurstWindowPercentage,
 		StableWindow:           defaultStableWindow,
 		ScaleDownDelay:         defaultScaleDownDelay,
 		MinScale:               defaultMinScale,
@@ -170,8 +170,8 @@ func NewDefaultAutoscalerConfig() *api.AutoscalerConfig {
 	}
 
 	// Adjust percentage to fraction if needed
-	if cfg.PanicThreshold > 10.0 {
-		cfg.PanicThreshold /= 100.0
+	if cfg.BurstThreshold > 10.0 {
+		cfg.BurstThreshold /= 100.0
 	}
 
 	return cfg
@@ -196,10 +196,10 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	totalTargetValue, err := parseFloat(data["total-target-value"], defaultTotalTargetValue)
 	errs.add(err)
 
-	panicThreshold, err := parseFloat(data["panic-threshold-percentage"], defaultPanicThresholdPercentage)
+	burstThreshold, err := parseFloat(data["burst-threshold-percentage"], defaultBurstThresholdPercentage)
 	errs.add(err)
 
-	panicWindowPercentage, err := parseFloat(data["panic-window-percentage"], defaultPanicWindowPercentage)
+	burstWindowPercentage, err := parseFloat(data["burst-window-percentage"], defaultBurstWindowPercentage)
 	errs.add(err)
 
 	stableWindow, err := parseDuration(data["stable-window"], defaultStableWindow)
@@ -227,8 +227,8 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 		MaxScaleDownRate:       maxScaleDownRate,
 		TargetValue:            targetValue,
 		TotalTargetValue:       totalTargetValue,
-		PanicThreshold:         panicThreshold,
-		PanicWindowPercentage:  panicWindowPercentage,
+		BurstThreshold:         burstThreshold,
+		BurstWindowPercentage:  burstWindowPercentage,
 		StableWindow:           stableWindow,
 		ScaleDownDelay:         scaleDownDelay,
 		MinScale:               minScale,
@@ -237,8 +237,8 @@ func LoadFromMap(data map[string]string) (*api.AutoscalerConfig, error) {
 	}
 
 	// Adjust percentage to fraction if needed
-	if cfg.PanicThreshold > 10.0 {
-		cfg.PanicThreshold /= 100.0
+	if cfg.BurstThreshold > 10.0 {
+		cfg.BurstThreshold /= 100.0
 	}
 
 	// Validate the configuration
@@ -290,9 +290,9 @@ func Validate(cfg *api.AutoscalerConfig) error {
 		errs.add(fmt.Errorf("stable-window = %v, must be specified with at most second precision", cfg.StableWindow))
 	}
 
-	// Validate panic window percentage
-	if cfg.PanicWindowPercentage < 1.0 || cfg.PanicWindowPercentage > 100.0 {
-		errs.add(fmt.Errorf("panic-window-percentage = %v, must be in [1.0, 100.0] interval", cfg.PanicWindowPercentage))
+	// Validate burst window percentage
+	if cfg.BurstWindowPercentage < 1.0 || cfg.BurstWindowPercentage > 100.0 {
+		errs.add(fmt.Errorf("burst-window-percentage = %v, must be in [1.0, 100.0] interval", cfg.BurstWindowPercentage))
 	}
 
 	// Validate scale bounds

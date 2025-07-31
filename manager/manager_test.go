@@ -61,9 +61,9 @@ func TestNewScaler(t *testing.T) {
 
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
-	config.PanicThreshold = 2.0
+	config.BurstThreshold = 2.0
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestNewScaler(t *testing.T) {
 func TestScalerChangeAggregationAlgorithm(t *testing.T) {
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	scaler, err := NewScaler("test-scaler", *config, "linear")
@@ -122,9 +122,9 @@ func TestScalerChangeAggregationAlgorithm(t *testing.T) {
 func TestScalerRecordAndScale(t *testing.T) {
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 10 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
-	config.PanicThreshold = 2.0
+	config.BurstThreshold = 2.0
 	config.MaxScaleUpRate = 1000.0
 	config.MaxScaleDownRate = 2.0
 
@@ -183,7 +183,7 @@ func TestNewManager(t *testing.T) {
 	// Test with initial scalers
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	scaler1, _ := NewScaler("cpu", *config, "linear")
@@ -199,7 +199,7 @@ func TestManagerRegisterUnregister(t *testing.T) {
 	manager := NewManager(1, 10)
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	// Register a scaler
@@ -273,7 +273,7 @@ func TestManagerChangeAggregationAlgorithm(t *testing.T) {
 	manager := NewManager(1, 10)
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	scaler, _ := NewScaler("cpu", *config, "linear")
@@ -296,7 +296,7 @@ func TestManagerRecord(t *testing.T) {
 	manager := NewManager(1, 10)
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	scaler, _ := NewScaler("cpu", *config, "linear")
@@ -328,9 +328,9 @@ func TestManagerScale(t *testing.T) {
 	// Create scalers
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 10 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
-	config.PanicThreshold = 2.0
+	config.BurstThreshold = 2.0
 	config.MaxScaleUpRate = 1000.0
 	config.MaxScaleDownRate = 2.0
 
@@ -383,9 +383,9 @@ func TestManagerScaleMultipleScenarios(t *testing.T) {
 
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 10 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
-	config.PanicThreshold = 2.0
+	config.BurstThreshold = 2.0
 	config.MaxScaleUpRate = 1000.0
 	config.MaxScaleDownRate = 2.0
 
@@ -430,7 +430,7 @@ func TestConcurrentAccess(t *testing.T) {
 	manager := NewManager(1, 100)
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 10 * time.Second
-	config.PanicWindowPercentage = 10.0
+	config.BurstWindowPercentage = 10.0
 	config.TargetValue = 100.0
 
 	// Create multiple scalers

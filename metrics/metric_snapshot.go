@@ -21,16 +21,16 @@ import "time"
 // MetricSnapshot represents a point-in-time view of metrics.
 type MetricSnapshot struct {
 	stableValue   float64
-	panicValue    float64
+	burstValue    float64
 	readyPodCount int32
 	timestamp     time.Time
 }
 
 // NewMetricSnapshot creates a new metric snapshot.
-func NewMetricSnapshot(stableValue, panicValue float64, readyPods int32, timestamp time.Time) *MetricSnapshot {
+func NewMetricSnapshot(stableValue, burstValue float64, readyPods int32, timestamp time.Time) *MetricSnapshot {
 	return &MetricSnapshot{
 		stableValue:   stableValue,
-		panicValue:    panicValue,
+		burstValue:    burstValue,
 		readyPodCount: readyPods,
 		timestamp:     timestamp,
 	}
@@ -41,9 +41,9 @@ func (s *MetricSnapshot) StableValue() float64 {
 	return s.stableValue
 }
 
-// PanicValue returns the metric value averaged over the panic window.
-func (s *MetricSnapshot) PanicValue() float64 {
-	return s.panicValue
+// BurstValue returns the metric value averaged over the burst window.
+func (s *MetricSnapshot) BurstValue() float64 {
+	return s.burstValue
 }
 
 // ReadyPodCount returns the number of ready pods.
