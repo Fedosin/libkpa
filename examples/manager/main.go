@@ -31,9 +31,9 @@ func main() {
 	// Configure autoscaler settings
 	config := libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 6 * time.Second
-	config.PanicWindowPercentage = 40.0
+	config.BurstWindowPercentage = 40.0
 	config.TargetValue = 280.0
-	config.PanicThreshold = 2.0
+	config.BurstThreshold = 2.0
 	config.MaxScaleUpRate = 1000.0
 	config.MaxScaleDownRate = 2.0
 

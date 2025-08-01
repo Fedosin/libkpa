@@ -27,13 +27,13 @@ import (
 // mockMetricSnapshot implements api.MetricSnapshot for testing
 type mockMetricSnapshot struct {
 	stableValue   float64
-	panicValue    float64
+	burstValue    float64
 	readyPodCount int32
 	timestamp     time.Time
 }
 
 func (m *mockMetricSnapshot) StableValue() float64 { return m.stableValue }
-func (m *mockMetricSnapshot) PanicValue() float64  { return m.panicValue }
+func (m *mockMetricSnapshot) BurstValue() float64  { return m.burstValue }
 func (m *mockMetricSnapshot) ReadyPodCount() int32 { return m.readyPodCount }
 func (m *mockMetricSnapshot) Timestamp() time.Time { return m.timestamp }
 
@@ -42,7 +42,7 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 	tests := []struct {
 		name      string
 		config    api.AutoscalerConfig
-		wantPanic bool
+		wantBurst bool
 	}{
 		{
 			name: "with scale down delay",
@@ -51,7 +51,7 @@ func TestNewSlidingWindowAutoscaler(t *testing.T) {
 				c.ScaleDownDelay = 10 * time.Second
 				return *c
 			}(),
-			wantPanic: false,
+			wantBurst: false,
 		},
 	}
 
@@ -79,7 +79,7 @@ func TestSlidingWindowAutoscaler_Scale_NoData(t *testing.T) {
 	// Test with negative stable value
 	snapshot := &mockMetricSnapshot{
 		stableValue:   -1,
-		panicValue:    100,
+		burstValue:    100,
 		readyPodCount: 1,
 		timestamp:     now,
 	}
@@ -89,17 +89,17 @@ func TestSlidingWindowAutoscaler_Scale_NoData(t *testing.T) {
 		t.Error("expected invalid recommendation with negative stable value")
 	}
 
-	// Test with negative panic value
+	// Test with negative burst value
 	snapshot = &mockMetricSnapshot{
 		stableValue:   100,
-		panicValue:    -1,
+		burstValue:    -1,
 		readyPodCount: 1,
 		timestamp:     now,
 	}
 
 	recommendation = autoscaler.Scale(snapshot, now)
 	if recommendation.ScaleValid {
-		t.Error("expected invalid recommendation with negative panic value")
+		t.Error("expected invalid recommendation with negative burst value")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			config: *libkpaconfig.NewDefaultAutoscalerConfig(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   250, // 2.5x target
-				panicValue:    250,
+				burstValue:    250,
 				readyPodCount: 2, // start with 2 pods instead of 1
 			},
 			expectedPodCount: 3, // ceil(250/100)
@@ -125,7 +125,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			config: *libkpaconfig.NewDefaultAutoscalerConfig(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   50, // 0.5x target
-				panicValue:    50,
+				burstValue:    50,
 				readyPodCount: 5,
 			},
 			expectedPodCount: 2, // limited by max scale down rate (5/2.0)
@@ -139,7 +139,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   50,
-				panicValue:    50,
+				burstValue:    50,
 				readyPodCount: 5,
 			},
 			expectedPodCount: 3, // min scale
@@ -153,7 +153,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   800, // would require 8 pods
-				panicValue:    800,
+				burstValue:    800,
 				readyPodCount: 5,
 			},
 			expectedPodCount: 8, // not limited by max scale yet
@@ -167,7 +167,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   50, // would only need 1 pod
-				panicValue:    50,
+				burstValue:    50,
 				readyPodCount: 1,
 			},
 			expectedPodCount: 3, // activation scale
@@ -182,7 +182,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   2500, // Total value of 2500
-				panicValue:    2500,
+				burstValue:    2500,
 				readyPodCount: 2,
 			},
 			expectedPodCount: 5, // ceil(2 * 2500/1000) = 5
@@ -197,7 +197,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   500, // Total value of 500
-				panicValue:    500,
+				burstValue:    500,
 				readyPodCount: 5,
 			},
 			expectedPodCount: 3, // ceil(5 * 500/1000) = 3
@@ -213,7 +213,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 			}(),
 			snapshot: mockMetricSnapshot{
 				stableValue:   100, // Would only need 1 pod
-				panicValue:    100,
+				burstValue:    100,
 				readyPodCount: 1,
 			},
 			expectedPodCount: 3, // activation scale
@@ -249,7 +249,7 @@ func TestSlidingWindowAutoscaler_Scale_BasicScaling(t *testing.T) {
 	}
 }
 
-func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
+func TestSlidingWindowAutoscaler_Scale_BurstMode(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	autoscaler, err := NewSlidingWindowAutoscaler(config)
 	if err != nil {
@@ -258,51 +258,51 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode(t *testing.T) {
 
 	now := time.Now()
 
-	// Test entering panic mode
+	// Test entering burst mode
 	snapshot := &mockMetricSnapshot{
 		stableValue:   100,
-		panicValue:    500, // 5x current capacity, exceeds 2x threshold
+		burstValue:    500, // 5x current capacity, exceeds 2x threshold
 		readyPodCount: 2,
 		timestamp:     now,
 	}
 
 	recommendation := autoscaler.Scale(snapshot, now)
-	if !recommendation.InPanicMode {
-		t.Error("expected to enter panic mode")
+	if !recommendation.InBurstMode {
+		t.Error("expected to enter burst mode")
 	}
 	if recommendation.DesiredPodCount != 5 {
 		t.Errorf("expected pod count 5, got %d", recommendation.DesiredPodCount)
 	}
 
-	// Test staying in panic mode (no scale down)
+	// Test staying in burst mode (no scale down)
 	now = now.Add(30 * time.Second)
 	snapshot = &mockMetricSnapshot{
 		stableValue:   100,
-		panicValue:    100,
+		burstValue:    100,
 		readyPodCount: 5,
 		timestamp:     now,
 	}
 
 	recommendation = autoscaler.Scale(snapshot, now)
-	if !recommendation.InPanicMode {
-		t.Error("expected to stay in panic mode")
+	if !recommendation.InBurstMode {
+		t.Error("expected to stay in burst mode")
 	}
 	if recommendation.DesiredPodCount != 5 {
 		t.Errorf("expected pod count to remain at 5, got %d", recommendation.DesiredPodCount)
 	}
 
-	// Test exiting panic mode after stable window
+	// Test exiting burst mode after stable window
 	now = now.Add(config.StableWindow + time.Second)
 	recommendation = autoscaler.Scale(snapshot, now)
-	if recommendation.InPanicMode {
-		t.Error("expected to exit panic mode")
+	if recommendation.InBurstMode {
+		t.Error("expected to exit burst mode")
 	}
 	if recommendation.DesiredPodCount != 2 {
-		t.Errorf("expected pod count 2 after exiting panic mode, got %d", recommendation.DesiredPodCount)
+		t.Errorf("expected pod count 2 after exiting burst mode, got %d", recommendation.DesiredPodCount)
 	}
 }
 
-func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) {
+func TestSlidingWindowAutoscaler_Scale_BurstMode_TotalTargetValue(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.TargetValue = 0
 	config.TotalTargetValue = 1000.0
@@ -313,17 +313,17 @@ func TestSlidingWindowAutoscaler_Scale_PanicMode_TotalTargetValue(t *testing.T) 
 
 	now := time.Now()
 
-	// Test entering panic mode with total target value
+	// Test entering burst mode with total target value
 	snapshot := &mockMetricSnapshot{
 		stableValue:   1000,
-		panicValue:    5000, // 5x current total capacity, exceeds 2x threshold
+		burstValue:    5000, // 5x current total capacity, exceeds 2x threshold
 		readyPodCount: 2,
 		timestamp:     now,
 	}
 
 	recommendation := autoscaler.Scale(snapshot, now)
-	if !recommendation.InPanicMode {
-		t.Error("expected to enter panic mode")
+	if !recommendation.InBurstMode {
+		t.Error("expected to enter burst mode")
 	}
 	// 2 pods * 5000 / 1000 = 10 pods
 	if recommendation.DesiredPodCount != 10 {
@@ -346,7 +346,7 @@ func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
 	// Test scale up rate limit
 	snapshot := &mockMetricSnapshot{
 		stableValue:   1000, // Would need 10 pods
-		panicValue:    1000,
+		burstValue:    1000,
 		readyPodCount: 2,
 		timestamp:     now,
 	}
@@ -359,7 +359,7 @@ func TestSlidingWindowAutoscaler_Scale_RateLimits(t *testing.T) {
 	// Test scale down rate limit
 	snapshot = &mockMetricSnapshot{
 		stableValue:   50, // Would need 1 pod
-		panicValue:    50,
+		burstValue:    50,
 		readyPodCount: 8,
 		timestamp:     now,
 	}
@@ -412,7 +412,7 @@ func TestSlidingWindowAutoscaler_Scale_ScaleToZero(t *testing.T) {
 	// Test scaling to zero with no load
 	snapshot := &mockMetricSnapshot{
 		stableValue:   0,
-		panicValue:    0,
+		burstValue:    0,
 		readyPodCount: 1,
 		timestamp:     now,
 	}
@@ -437,7 +437,7 @@ func TestSlidingWindowAutoscaler_Scale_ActivationScaleWithZeroMetrics(t *testing
 	// Test that activation scale doesn't apply when metrics are zero
 	snapshot := &mockMetricSnapshot{
 		stableValue:   0,
-		panicValue:    0,
+		burstValue:    0,
 		readyPodCount: 1,
 		timestamp:     now,
 	}
@@ -459,7 +459,7 @@ func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
 	// Test with zero ready pods (should default to 1 to avoid division by zero)
 	snapshot := &mockMetricSnapshot{
 		stableValue:   100,
-		panicValue:    100,
+		burstValue:    100,
 		readyPodCount: 0,
 		timestamp:     now,
 	}
@@ -474,10 +474,10 @@ func TestSlidingWindowAutoscaler_Scale_ReadyPodCountZero(t *testing.T) {
 	}
 }
 
-// Tests for PanicModeCalculator
-func TestNewPanicModeCalculator(t *testing.T) {
+// Tests for BurstModeCalculator
+func TestNewBurstModeCalculator(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
-	calculator := NewPanicModeCalculator(&config)
+	calculator := NewBurstModeCalculator(&config)
 
 	if calculator == nil {
 		t.Fatal("expected non-nil calculator")
@@ -487,35 +487,35 @@ func TestNewPanicModeCalculator(t *testing.T) {
 	}
 }
 
-func TestPanicModeCalculator_CalculatePanicWindow(t *testing.T) {
+func TestBurstModeCalculator_CalculateBurstWindow(t *testing.T) {
 	tests := []struct {
 		name           string
 		stableWindow   time.Duration
-		panicPercent   float64
+		burstPercent   float64
 		expectedWindow time.Duration
 	}{
 		{
 			name:           "10% of 60s",
 			stableWindow:   60 * time.Second,
-			panicPercent:   10.0,
+			burstPercent:   10.0,
 			expectedWindow: 6 * time.Second,
 		},
 		{
 			name:           "50% of 60s",
 			stableWindow:   60 * time.Second,
-			panicPercent:   50.0,
+			burstPercent:   50.0,
 			expectedWindow: 30 * time.Second,
 		},
 		{
 			name:           "100% of 60s",
 			stableWindow:   60 * time.Second,
-			panicPercent:   100.0,
+			burstPercent:   100.0,
 			expectedWindow: 60 * time.Second,
 		},
 		{
 			name:           "5% of 120s",
 			stableWindow:   120 * time.Second,
-			panicPercent:   5.0,
+			burstPercent:   5.0,
 			expectedWindow: 6 * time.Second,
 		},
 	}
@@ -524,10 +524,10 @@ func TestPanicModeCalculator_CalculatePanicWindow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := *libkpaconfig.NewDefaultAutoscalerConfig()
 			config.StableWindow = tt.stableWindow
-			config.PanicWindowPercentage = tt.panicPercent
+			config.BurstWindowPercentage = tt.burstPercent
 
-			calculator := NewPanicModeCalculator(&config)
-			result := calculator.CalculatePanicWindow()
+			calculator := NewBurstModeCalculator(&config)
+			result := calculator.CalculateBurstWindow()
 
 			if result != tt.expectedWindow {
 				t.Errorf("expected %v, got %v", tt.expectedWindow, result)
@@ -536,10 +536,10 @@ func TestPanicModeCalculator_CalculatePanicWindow(t *testing.T) {
 	}
 }
 
-func TestPanicModeCalculator_ShouldEnterPanicMode(t *testing.T) {
+func TestBurstModeCalculator_ShouldEnterBurstMode(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
-	config.PanicThreshold = 2.0 // 200%
-	calculator := NewPanicModeCalculator(&config)
+	config.BurstThreshold = 2.0 // 200%
+	calculator := NewBurstModeCalculator(&config)
 
 	tests := []struct {
 		name        string
@@ -575,7 +575,7 @@ func TestPanicModeCalculator_ShouldEnterPanicMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := calculator.ShouldEnterPanicMode(tt.desiredPods, tt.currentPods)
+			result := calculator.ShouldEnterBurstMode(tt.desiredPods, tt.currentPods)
 			if result != tt.shouldEnter {
 				t.Errorf("expected %v, got %v", tt.shouldEnter, result)
 			}
@@ -583,38 +583,38 @@ func TestPanicModeCalculator_ShouldEnterPanicMode(t *testing.T) {
 	}
 }
 
-func TestPanicModeCalculator_ShouldExitPanicMode(t *testing.T) {
+func TestBurstModeCalculator_ShouldExitBurstMode(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
 	config.StableWindow = 60 * time.Second
-	calculator := NewPanicModeCalculator(&config)
+	calculator := NewBurstModeCalculator(&config)
 
 	now := time.Now()
-	panicStartTime := now.Add(-30 * time.Second)
+	burstStartTime := now.Add(-30 * time.Second)
 
 	tests := []struct {
 		name        string
-		panicStart  time.Time
+		burstStart  time.Time
 		currentTime time.Time
 		overThresh  bool
 		shouldExit  bool
 	}{
 		{
 			name:        "still over threshold",
-			panicStart:  panicStartTime,
+			burstStart:  burstStartTime,
 			currentTime: now,
 			overThresh:  true,
 			shouldExit:  false,
 		},
 		{
 			name:        "below threshold but not enough time",
-			panicStart:  panicStartTime,
+			burstStart:  burstStartTime,
 			currentTime: now,
 			overThresh:  false,
 			shouldExit:  false, // only 30s passed, need 60s
 		},
 		{
 			name:        "below threshold and enough time passed",
-			panicStart:  now.Add(-70 * time.Second),
+			burstStart:  now.Add(-70 * time.Second),
 			currentTime: now,
 			overThresh:  false,
 			shouldExit:  true,
@@ -623,7 +623,7 @@ func TestPanicModeCalculator_ShouldExitPanicMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := calculator.ShouldExitPanicMode(tt.panicStart, tt.currentTime, tt.overThresh)
+			result := calculator.ShouldExitBurstMode(tt.burstStart, tt.currentTime, tt.overThresh)
 			if result != tt.shouldExit {
 				t.Errorf("expected %v, got %v", tt.shouldExit, result)
 			}
@@ -631,55 +631,55 @@ func TestPanicModeCalculator_ShouldExitPanicMode(t *testing.T) {
 	}
 }
 
-func TestPanicModeCalculator_CalculateDesiredPods(t *testing.T) {
+func TestBurstModeCalculator_CalculateDesiredPods(t *testing.T) {
 	config := *libkpaconfig.NewDefaultAutoscalerConfig()
-	calculator := NewPanicModeCalculator(&config)
+	calculator := NewBurstModeCalculator(&config)
 
 	tests := []struct {
 		name          string
 		stableDesired int32
-		panicDesired  int32
-		inPanicMode   bool
-		maxPanicPods  int32
+		burstDesired  int32
+		inBurstMode   bool
+		maxBurstPods  int32
 		expected      int32
 	}{
 		{
-			name:          "not in panic mode",
+			name:          "not in burst mode",
 			stableDesired: 5,
-			panicDesired:  10,
-			inPanicMode:   false,
-			maxPanicPods:  8,
+			burstDesired:  10,
+			inBurstMode:   false,
+			maxBurstPods:  8,
 			expected:      5, // use stable
 		},
 		{
-			name:          "panic mode - panic higher",
+			name:          "burst mode - burst higher",
 			stableDesired: 5,
-			panicDesired:  10,
-			inPanicMode:   true,
-			maxPanicPods:  8,
-			expected:      10, // use panic (higher)
+			burstDesired:  10,
+			inBurstMode:   true,
+			maxBurstPods:  8,
+			expected:      10, // use burst (higher)
 		},
 		{
-			name:          "panic mode - stable higher",
+			name:          "burst mode - stable higher",
 			stableDesired: 10,
-			panicDesired:  5,
-			inPanicMode:   true,
-			maxPanicPods:  8,
+			burstDesired:  5,
+			inBurstMode:   true,
+			maxBurstPods:  8,
 			expected:      10, // use stable (higher)
 		},
 		{
-			name:          "panic mode - prevent scale down",
+			name:          "burst mode - prevent scale down",
 			stableDesired: 3,
-			panicDesired:  4,
-			inPanicMode:   true,
-			maxPanicPods:  8,
-			expected:      8, // maintain max panic pods
+			burstDesired:  4,
+			inBurstMode:   true,
+			maxBurstPods:  8,
+			expected:      8, // maintain max burst pods
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := calculator.CalculateDesiredPods(tt.stableDesired, tt.panicDesired, tt.inPanicMode, tt.maxPanicPods)
+			result := calculator.CalculateDesiredPods(tt.stableDesired, tt.burstDesired, tt.inBurstMode, tt.maxBurstPods)
 			if result != tt.expected {
 				t.Errorf("expected %d, got %d", tt.expected, result)
 			}

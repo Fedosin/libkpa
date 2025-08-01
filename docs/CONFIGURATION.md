@@ -25,12 +25,12 @@ All environment variables use the `AUTOSCALER_` prefix.
 | `AUTOSCALER_SCALE_DOWN_DELAY` | duration | `0s` | Delay before applying scale-down decisions | >= 0s |
 | `AUTOSCALER_SCALE_TO_ZERO_GRACE_PERIOD` | duration | `30s` | Grace period before scaling to zero | > 0s |
 
-### Panic Mode Configuration
+### Burst Mode Configuration
 
 | Environment Variable | Type | Default | Description | Valid Range |
 |---------------------|------|---------|-------------|-------------|
-| `AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE` | float | `200.0` | Percentage threshold to enter panic mode | > 100.0 |
-| `AUTOSCALER_PANIC_WINDOW_PERCENTAGE` | float | `10.0` | Panic window as percentage of stable window | 1.0 - 100.0 |
+| `AUTOSCALER_BURST_THRESHOLD_PERCENTAGE` | float | `200.0` | Percentage threshold to enter burst mode | > 100.0 |
+| `AUTOSCALER_BURST_WINDOW_PERCENTAGE` | float | `10.0` | Burst window as percentage of stable window | 1.0 - 100.0 |
 
 ### Scale Bounds
 
@@ -54,8 +54,8 @@ configMap := map[string]string{
     "stable-window":                             "60s",
     "scale-down-delay":                          "0s",
     "scale-to-zero-grace-period":                "30s",
-    "panic-threshold-percentage":                "200",
-    "panic-window-percentage":                   "10",
+    "burst-threshold-percentage":                "200",
+    "burst-window-percentage":                   "10",
     "min-scale":                                 "0",
     "max-scale":                                 "10",
     "activation-scale":                          "1",
@@ -95,8 +95,8 @@ For services where response time is critical:
 
 ```bash
 export AUTOSCALER_TARGET_VALUE=50
-export AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE=150
-export AUTOSCALER_PANIC_WINDOW_PERCENTAGE=5
+export AUTOSCALER_BURST_THRESHOLD_PERCENTAGE=150
+export AUTOSCALER_BURST_WINDOW_PERCENTAGE=5
 export AUTOSCALER_MIN_SCALE=2
 ```
 
@@ -107,7 +107,7 @@ The configuration validation enforces these rules:
 1. **Scale bounds**: `min-scale` <= `max-scale` (when max-scale > 0)
 2. **Time windows**: Must be specified with second precision (no sub-second values)
 3. **Percentages**: 
-   - `panic-window-percentage`: [1, 100]
+   - `burst-window-percentage`: [1, 100]
 4. **Scale rates**: Must be > 1.0
 5. **Target values**: Must be >= 0.01
 6. **Stable window**: Must be between 5s and 600s
@@ -117,5 +117,5 @@ The configuration validation enforces these rules:
 1. **Start Conservative**: Begin with default values and adjust based on observed behavior
 2. **Monitor Metrics**: Use the transmitter interface to export metrics for monitoring
 3. **Test Scale Down**: Always test scale-down behavior in staging before production
-4. **Panic Mode**: Set panic thresholds based on your service's ability to handle spikes
+4. **Burst Mode**: Set burst thresholds based on your service's ability to handle spikes
 5. **Window Sizes**: Larger windows provide more stability but slower response to changes 

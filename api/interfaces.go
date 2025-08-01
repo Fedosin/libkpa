@@ -45,8 +45,8 @@ type MetricSnapshot interface {
 	// StableValue returns the metric value averaged over the stable window.
 	StableValue() float64
 
-	// PanicValue returns the metric value averaged over the panic window.
-	PanicValue() float64
+	// BurstValue returns the metric value averaged over the burst window.
+	BurstValue() float64
 
 	// ReadyPodCount returns the number of ready pods.
 	ReadyPodCount() int32

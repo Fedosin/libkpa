@@ -106,8 +106,8 @@ func TestLoad(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         2.0, // 200% converted to fraction
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0, // 200% converted to fraction
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               0,
@@ -122,8 +122,8 @@ func TestLoad(t *testing.T) {
 				"AUTOSCALER_MAX_SCALE_UP_RATE":          "500.5",
 				"AUTOSCALER_MAX_SCALE_DOWN_RATE":        "3.5",
 				"AUTOSCALER_TARGET_VALUE":               "100.0",
-				"AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE": "150.0",
-				"AUTOSCALER_PANIC_WINDOW_PERCENTAGE":    "20.0",
+				"AUTOSCALER_BURST_THRESHOLD_PERCENTAGE": "150.0",
+				"AUTOSCALER_BURST_WINDOW_PERCENTAGE":    "20.0",
 				"AUTOSCALER_STABLE_WINDOW":              "120s",
 				"AUTOSCALER_SCALE_DOWN_DELAY":           "10s",
 				"AUTOSCALER_MIN_SCALE":                  "1",
@@ -136,8 +136,8 @@ func TestLoad(t *testing.T) {
 				MaxScaleDownRate:       3.5,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         1.5, // 150% converted to fraction
-				PanicWindowPercentage:  20.0,
+				BurstThreshold:         1.5, // 150% converted to fraction
+				BurstWindowPercentage:  20.0,
 				StableWindow:           120 * time.Second,
 				ScaleDownDelay:         10 * time.Second,
 				MinScale:               1,
@@ -146,9 +146,9 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			name: "panic threshold already as fraction",
+			name: "burst threshold already as fraction",
 			envVars: map[string]string{
-				"AUTOSCALER_PANIC_THRESHOLD_PERCENTAGE": "2.5",
+				"AUTOSCALER_BURST_THRESHOLD_PERCENTAGE": "2.5",
 			},
 			want: &api.AutoscalerConfig{
 				ScaleToZeroGracePeriod: 30 * time.Second,
@@ -156,8 +156,8 @@ func TestLoad(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         2.5, // Already a fraction, not converted
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.5, // Already a fraction, not converted
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               0,
@@ -177,8 +177,8 @@ func TestLoad(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            0.0,
 				TotalTargetValue:       2000.0,
-				PanicThreshold:         2.0,
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0,
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               0,
@@ -271,8 +271,8 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         2.0,
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0,
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               0,
@@ -287,8 +287,8 @@ func TestLoadFromMap(t *testing.T) {
 				"max-scale-up-rate":          "500.5",
 				"max-scale-down-rate":        "3.5",
 				"target-value":               "100.0",
-				"panic-threshold-percentage": "150.0",
-				"panic-window-percentage":    "20.0",
+				"burst-threshold-percentage": "150.0",
+				"burst-window-percentage":    "20.0",
 				"stable-window":              "120s",
 				"scale-down-delay":           "10s",
 				"min-scale":                  "1",
@@ -301,8 +301,8 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScaleDownRate:       3.5,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         1.5,
-				PanicWindowPercentage:  20.0,
+				BurstThreshold:         1.5,
+				BurstWindowPercentage:  20.0,
 				StableWindow:           120 * time.Second,
 				ScaleDownDelay:         10 * time.Second,
 				MinScale:               1,
@@ -323,8 +323,8 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            100.0,
 				TotalTargetValue:       0.0,
-				PanicThreshold:         2.0,
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0,
+				BurstWindowPercentage:  10.0,
 				StableWindow:           30 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               5,
@@ -344,8 +344,8 @@ func TestLoadFromMap(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            0.0,
 				TotalTargetValue:       1500.0,
-				PanicThreshold:         2.0,
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0,
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         0 * time.Second,
 				MinScale:               0,
@@ -420,8 +420,8 @@ func TestValidate(t *testing.T) {
 				MaxScaleUpRate:         1000.0,
 				MaxScaleDownRate:       2.0,
 				TargetValue:            100.0,
-				PanicThreshold:         2.0,
-				PanicWindowPercentage:  10.0,
+				BurstThreshold:         2.0,
+				BurstWindowPercentage:  10.0,
 				StableWindow:           60 * time.Second,
 				ScaleDownDelay:         10 * time.Second,
 				MinScale:               0,
@@ -479,7 +479,7 @@ func TestValidate(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            1.0,
 				StableWindow:           60 * time.Second,
-				PanicWindowPercentage:  10.0,
+				BurstWindowPercentage:  10.0,
 				ActivationScale:        1,
 			},
 			wantErr: false,
@@ -578,32 +578,32 @@ func TestValidate(t *testing.T) {
 			errMsg:  "stable-window = 1m0.1s, must be specified with at most second precision",
 		},
 		{
-			name: "panic window percentage too low",
+			name: "burst window percentage too low",
 			config: &api.AutoscalerConfig{
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         2.0,
 				MaxScaleDownRate:       2.0,
 				TargetValue:            1.0,
 				StableWindow:           60 * time.Second,
-				PanicWindowPercentage:  0.5,
+				BurstWindowPercentage:  0.5,
 				ActivationScale:        1,
 			},
 			wantErr: true,
-			errMsg:  "panic-window-percentage = 0.5, must be in [1.0, 100.0] interval",
+			errMsg:  "burst-window-percentage = 0.5, must be in [1.0, 100.0] interval",
 		},
 		{
-			name: "panic window percentage too high",
+			name: "burst window percentage too high",
 			config: &api.AutoscalerConfig{
 				ScaleToZeroGracePeriod: 30 * time.Second,
 				MaxScaleUpRate:         2.0,
 				MaxScaleDownRate:       2.0,
 				TargetValue:            1.0,
 				StableWindow:           60 * time.Second,
-				PanicWindowPercentage:  101.0,
+				BurstWindowPercentage:  101.0,
 				ActivationScale:        1,
 			},
 			wantErr: true,
-			errMsg:  "panic-window-percentage = 101, must be in [1.0, 100.0] interval",
+			errMsg:  "burst-window-percentage = 101, must be in [1.0, 100.0] interval",
 		},
 		{
 			name: "negative min scale",
@@ -656,7 +656,7 @@ func TestValidate(t *testing.T) {
 				MaxScaleDownRate:       2.0,
 				TargetValue:            1.0,
 				StableWindow:           60 * time.Second,
-				PanicWindowPercentage:  10.0,
+				BurstWindowPercentage:  10.0,
 				MinScale:               10,
 				MaxScale:               0,
 				ActivationScale:        1,
@@ -765,8 +765,8 @@ func configsEqual(a, b *api.AutoscalerConfig) bool {
 		a.MaxScaleDownRate == b.MaxScaleDownRate &&
 		a.TargetValue == b.TargetValue &&
 		a.TotalTargetValue == b.TotalTargetValue &&
-		a.PanicThreshold == b.PanicThreshold &&
-		a.PanicWindowPercentage == b.PanicWindowPercentage &&
+		a.BurstThreshold == b.BurstThreshold &&
+		a.BurstWindowPercentage == b.BurstWindowPercentage &&
 		a.StableWindow == b.StableWindow &&
 		a.ScaleDownDelay == b.ScaleDownDelay &&
 		a.MinScale == b.MinScale &&

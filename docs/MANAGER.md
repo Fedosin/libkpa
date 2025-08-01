@@ -53,7 +53,7 @@ Each Scaler contains:
 │  │  (TimeWindow/Weighted)   │  │
 │  └──────────────────────────┘  │
 │  ┌──────────────────────────┐  │
-│  │    Panic Aggregator      │  │
+│  │    Burst Aggregator      │  │
 │  │  (TimeWindow/Weighted)   │  │
 │  └──────────────────────────┘  │
 └────────────────────────────────┘
@@ -78,9 +78,9 @@ func main() {
     // Configure autoscaler
     config := api.AutoscalerConfig{
         StableWindow:          60 * time.Second,
-        PanicWindowPercentage: 10.0,
+        BurstWindowPercentage: 10.0,
         TargetValue:           100.0,      // Target per pod
-        PanicThreshold:        2.0,        // 200% threshold
+        BurstThreshold:        2.0,        // 200% threshold
         MaxScaleUpRate:        1000.0,     // Unlimited scale up
         MaxScaleDownRate:      2.0,        // Max halve pods
     }
@@ -279,7 +279,7 @@ config := api.AutoscalerConfig{
 ### 3. Window Sizing
 
 - **Stable Window**: 60-300 seconds for most workloads
-- **Panic Window**: 5-10% of stable window
+- **Burst Window**: 5-10% of stable window
 - Shorter windows = faster response but more noise
 - Longer windows = stability but slower response
 

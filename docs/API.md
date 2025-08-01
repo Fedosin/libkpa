@@ -14,8 +14,8 @@ type AutoscalerConfig struct {
     MaxScaleDownRate       float64       // Max rate to scale down (e.g., 2.0 = halve pods)
     TargetValue            float64       // Target metric value per pod (mutually exclusive with TotalTargetValue)
     TotalTargetValue       float64       // Total target metric value across all pods (mutually exclusive with TargetValue)
-    PanicThreshold         float64       // Threshold to enter panic mode (as ratio)
-    PanicWindowPercentage  float64       // Panic window as % of stable window
+    BurstThreshold         float64       // Threshold to enter burst mode (as ratio)
+    BurstWindowPercentage  float64       // Burst window as % of stable window
     StableWindow           time.Duration // Time window for stable metrics
     ScaleDownDelay         time.Duration // Delay before scaling down
     MinScale               int32         // Minimum pod count
@@ -44,7 +44,7 @@ The autoscaler's scaling recommendation:
 type ScaleRecommendation struct {
     DesiredPodCount     int32   // Recommended number of pods
     ScaleValid          bool    // Whether recommendation is valid
-    InPanicMode         bool    // Whether in panic mode
+    InBurstMode         bool    // Whether in burst mode
 }
 ```
 
@@ -74,7 +74,7 @@ Point-in-time view of metrics:
 ```go
 type MetricSnapshot interface {
     StableValue() float64    // Metric averaged over stable window
-    PanicValue() float64     // Metric averaged over panic window
+    BurstValue() float64     // Metric averaged over burst window
     ReadyPodCount() int      // Number of ready pods
     Timestamp() time.Time    // When snapshot was taken
 }
@@ -102,8 +102,8 @@ spec := api.AutoscalerConfig{
     MaxScaleUpRate:         10.0,
     MaxScaleDownRate:       2.0,
     TargetValue:            100.0,
-    PanicThreshold:         2.0,
-    PanicWindowPercentage:  10.0,
+    BurstThreshold:         2.0,
+    BurstWindowPercentage:  10.0,
     StableWindow:           60 * time.Second,
     ScaleDownDelay:         0,
     MinScale:               0,
@@ -121,12 +121,12 @@ autoscaler := algorithm.NewSlidingWindowAutoscaler(spec)
 ```go
 // In a real implementation, these values would come from pod metrics
 stableValue := 250.0  // e.g., total concurrent requests
-panicValue := 300.0   // recent spike in requests
+burstValue := 300.0   // recent spike in requests
 readyPods := 2
 
 snapshot := metrics.NewMetricSnapshot(
     stableValue,
-    panicValue,
+    burstValue,
     readyPods,
     time.Now(),
 )
@@ -140,7 +140,7 @@ recommendation := autoscaler.Scale(snapshot, time.Now())
 
 if recommendation.ScaleValid {
     fmt.Printf("Desired pods: %d\n", recommendation.DesiredPodCount)
-    fmt.Printf("In panic mode: %v\n", recommendation.InPanicMode)
+    fmt.Printf("In burst mode: %v\n", recommendation.InBurstMode)
     
     // Apply the recommendation to your deployment
     // deployment.Spec.Replicas = &recommendation.DesiredPodCount

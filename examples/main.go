@@ -69,7 +69,7 @@ func main() {
 	// Override some values for demonstration
 	cfg.TargetValue = 100.0
 	cfg.StableWindow = 30 * time.Second
-	cfg.PanicWindowPercentage = 10.0
+	cfg.BurstWindowPercentage = 10.0
 	cfg.MinScale = 1
 	cfg.MaxScale = 10
 	cfg.ScaleDownDelay = 5 * time.Second
@@ -91,18 +91,18 @@ func main() {
 	// Create a metric transmitter for logging
 	metricTransmitter := transmitter.NewLogTransmitter(nil)
 
-	// Create metric windows for stable and panic averages
+	// Create metric windows for stable and burst averages
 	stableWindow, err := metrics.NewTimeWindow(cfg.StableWindow, time.Second)
 	if err != nil {
 		log.Fatalf("Failed to create new stable time window: %v", err)
 	}
 
-	panicWindow, err := metrics.NewTimeWindow(
-		max(time.Second, time.Duration(float64(cfg.StableWindow)*cfg.PanicWindowPercentage/100)),
+	burstWindow, err := metrics.NewTimeWindow(
+		max(time.Second, time.Duration(float64(cfg.StableWindow)*cfg.BurstWindowPercentage/100)),
 		time.Second,
 	)
 	if err != nil {
-		log.Fatalf("Failed to create new panic time window: %v", err)
+		log.Fatalf("Failed to create new burst time window: %v", err)
 	}
 
 	// Create a mock metric collector
@@ -167,16 +167,16 @@ func main() {
 
 			// Record in windows
 			stableWindow.Record(now, totalConcurrency)
-			panicWindow.Record(now, totalConcurrency)
+			burstWindow.Record(now, totalConcurrency)
 
 			// Get window averages
 			stableAvg := stableWindow.WindowAverage(now)
-			panicAvg := panicWindow.WindowAverage(now)
+			burstAvg := burstWindow.WindowAverage(now)
 
 			// Create metric snapshot
 			snapshot := metrics.NewMetricSnapshot(
 				stableAvg,
-				panicAvg,
+				burstAvg,
 				currentPods,
 				now,
 			)
@@ -185,10 +185,10 @@ func main() {
 			recommendation := autoscaler.Scale(snapshot, now)
 
 			// Log current state
-			fmt.Printf("[%s] Metrics: stable=%.1f, panic=%.1f, current=%d pods\n",
+			fmt.Printf("[%s] Metrics: stable=%.1f, burst=%.1f, current=%d pods\n",
 				now.Format("15:04:05"),
 				stableAvg,
-				panicAvg,
+				burstAvg,
 				currentPods,
 			)
 
@@ -202,16 +202,16 @@ func main() {
 				}
 
 				fmt.Printf("  → Recommendation: %s to %d pods", action, recommendation.DesiredPodCount)
-				if recommendation.InPanicMode {
-					fmt.Print(" [PANIC MODE]")
+				if recommendation.InBurstMode {
+					fmt.Print(" [BURST MODE]")
 				}
 				fmt.Println()
 
 				// Record metrics
 				metricTransmitter.RecordDesiredPods(ctx, "default", "example-app", recommendation.DesiredPodCount)
 				metricTransmitter.RecordStableValue(ctx, "default", "example-app", scalingMetric, stableAvg)
-				metricTransmitter.RecordPanicValue(ctx, "default", "example-app", scalingMetric, panicAvg)
-				metricTransmitter.RecordPanicMode(ctx, "default", "example-app", recommendation.InPanicMode)
+				metricTransmitter.RecordBurstValue(ctx, "default", "example-app", scalingMetric, burstAvg)
+				metricTransmitter.RecordBurstMode(ctx, "default", "example-app", recommendation.InBurstMode)
 
 				// Simulate applying the recommendation
 				if recommendation.DesiredPodCount != currentPods {
